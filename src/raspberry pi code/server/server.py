@@ -97,7 +97,7 @@ def background_thread():
         for node in mock_nodes:
             node['current_rssi'] = randint(0,255)
 
-        socketio.emit('heart_beat', {'current_rssi': [node['current_rssi'] for node in mock_nodes]})
+        socketio.emit('heartbeat', {'current_rssi': [node['current_rssi'] for node in mock_nodes]})
         socketio.sleep(5)
 
 if __name__ == '__main__':
