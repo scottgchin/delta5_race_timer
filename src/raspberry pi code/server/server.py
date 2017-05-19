@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+import gevent
+import gevent.monkey
+gevent.monkey.patch_all()
+
 from flask import Flask, render_template, session, request
 from flask_socketio import SocketIO, emit, join_room, leave_room, \
     close_room, rooms, disconnect
@@ -9,7 +13,7 @@ from random import randint
 # Set this variable to "threading", "eventlet" or "gevent" to test the
 # different async modes, or leave it set to None for the application to choose
 # the best option based on installed packages.
-async_mode = None
+async_mode = "gevent"
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
@@ -41,6 +45,9 @@ def index():
 @socketio.on('connect')
 def connect_handler():
     print ('connected!!');
+    global thread
+    if (thread is None):
+        thread = gevent.spawn(background_thread)
 
 @socketio.on('disconnect')
 def disconnect_handler():
@@ -57,6 +64,7 @@ def on_get_timestamp():
 @socketio.on('get_settings')
 def on_get_settings():
     return {'nodes': mock_nodes}
+
 
 # todo: how should the frequency be sent?
 @socketio.on('set_frequency')
@@ -98,8 +106,7 @@ def background_thread():
             node['current_rssi'] = randint(0,255)
 
         socketio.emit('heartbeat', {'current_rssi': [node['current_rssi'] for node in mock_nodes]})
-        socketio.sleep(5)
+        gevent.sleep(5)
 
 if __name__ == '__main__':
-    thread = socketio.start_background_task(target=background_thread)
-    socketio.run(app, debug=True)
+    socketio.run(app, host='0.0.0.0', debug=True)
