@@ -18,29 +18,47 @@
 	<script type="text/javascript" src="/scripts/jquery-3.1.1.js"></script>
 		
 	<?php
-	if (isset($_POST['startComms'])) {exec("sudo python /home/pi/VTX/startComms.py"); }
-	if (isset($_POST['stopComms'])) {
-		exec("sudo python /home/pi/VTX/stopRace.py"); # Also be sure to stop the race if stopping comms
-		exec("sudo python /home/pi/VTX/stopComms.py");
+	# Start / Stop system commands
+	if (isset($_POST['startSystem'])) {exec("sudo python /home/pi/VTX/startSystem.py"); }
+	if (isset($_POST['stopSystem'])) {
+		exec("sudo python /home/pi/VTX/stopRace.py"); # Also 'stopRace' if stopping comms
+		exec("sudo python /home/pi/VTX/stopSystem.py");
 	}
 	
-	if (isset($_GET['setMinLapTime'])) {
-		$minLapTime = htmlentities($_GET['minLapTime']);
+	# Set min lap time
+	if (isset($_POST['setMinLapTime'])) {
+		$minLapTime = htmlentities($_POST['minLapTime']);
 		exec("sudo python /home/pi/VTX/setMinLapTime.py ".$minLapTime);
 	}
+
+	# Set vtx channel / frequency
+	if (isset($_POST['setVtxFrequency'])) {
+		$conn = new mysqli('localhost', 'root', 'delta5fpv', 'vtx');
+		if ($conn->connect_error) {	die("Connection error: " . $conn->connect_error); }
+		$result = $conn->query("SELECT `i2cAddr` FROM `nodes` WHERE `node` = ".$_POST['nodeid']) or die($conn->error());
+
+		while($node = $result->fetch_assoc()) {	
+			$vtxFrequency = htmlentities($_POST['vtxFrequency']);
+			exec("sudo python /home/pi/VTX/setVtxFrequency.py ".$node['i2cAddr']." ".$vtxFrequency);
+		}
+		$conn->close();
+	}
 	
+	# Set rssi trigger value
 	if (isset($_POST['rssiTrigger']) && isset($_POST['nodeid'])) {
 		$conn = new mysqli('localhost', 'root', 'delta5fpv', 'vtx');
 		if ($conn->connect_error) {	die("Connection error: " . $conn->connect_error); }
-		$result = $conn->query("SELECT `i2cAddr`, `rssi`, `rssiTrigger` FROM `nodes` WHERE `node` = ".$_POST['nodeid']) or die($conn->error());
-		
-		while($node = $result->fetch_assoc()) {			
-			if ($_POST['rssiTrigger'] == 'Set') { $newrssi = $node['rssi']; }
-			if ($_POST['rssiTrigger'] == 'Zero') { $newrssi = 0; }
-			if ($_POST['rssiTrigger'] == 'Inc') { $newrssi = $node['rssiTrigger'] + 5; }
-			if ($_POST['rssiTrigger'] == 'Dec') { $newrssi = $node['rssiTrigger'] - 5; }
-			exec("sudo python /home/pi/VTX/rssiTrigger.py ".$node['i2cAddr']." ".$newrssi);
-		}
+		$results = $conn->query("SELECT `rssi` FROM `nodesMem` WHERE `node` = ".$_POST['nodeid']) or die($conn->error());
+		$rssi = $results->fetch_assoc();
+		$results = $conn->query("SELECT `i2cAddr`, `rssiTrigger` FROM `nodes` WHERE `node` = ".$_POST['nodeid']) or die($conn->error());
+		$node = $results->fetch_assoc();
+
+		if ($_POST['rssiTrigger'] == 'Set') { $newrssi = $rssi['rssi']; }
+		if ($_POST['rssiTrigger'] == 'Zero') { $newrssi = 0; }
+		if ($_POST['rssiTrigger'] == 'Inc') { $newrssi = $node['rssiTrigger'] + 5; }
+		if ($_POST['rssiTrigger'] == 'Dec') { $newrssi = $node['rssiTrigger'] - 5; }
+		exec("sudo python /home/pi/VTX/setRssiTrigger.py ".$node['i2cAddr']." ".$newrssi);
+
 		$conn->close();
 	}
 	?>
@@ -63,7 +81,7 @@
 	<div class="mdl-layout-spacer"></div>
 	
 	<nav class="mdl-navigation">
-		<a class="delta5-navigation mdl-navigation__link" href="database.php"><button class="delta5-navigation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored">Database</button></a>
+		<a class="delta5-navigation mdl-navigation__link" href="setup.php"><button class="delta5-navigation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored">Setup</button></a>
 	</nav>
 	
 	<span class="mdl-layout-title">
@@ -76,31 +94,30 @@
 <main class="mdl-layout__content">
 <div class="page-content">
 
-<div><h5>Communication</h5></div>
 <div class="mdl-grid"><div class="mdl-cell mdl-cell--12-col">
 <form method="post">
-<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="startComms">Start Comms</button>&nbsp;
-<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="stopComms">Stop Comms</button>
+	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="startSystem">Start System</button>&nbsp;
+	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="stopSystem">Stop System</button>
 </form>
 </div></div>
 
 
-<div><h5>Setup</h5></div>
+<div><h5>System Status</h5></div>
 <div class="mdl-grid">
 <div class="mdl-cell mdl-cell--2-col" id="setupData">
 	<script type="text/javascript">
-	$(document).ready(function() { setInterval(function() { $('#setupData').load('buildSetupTable.php') }, 1000); } );
+	$(document).ready(function() { setInterval(function() { $('#setupData').load('buildSystemStatusTable.php') }, 1000); } );
 	</script>
 </div>
 <div class="mdl-cell mdl-cell--2-col">
-<form method="get">
-<div class="mdl-textfield mdl-js-textfield">
-	<input class="mdl-textfield__input" type="text" pattern="-?[0-9]*(\.[0-9]+)?" id="minLapTime" name="minLapTime">
-	<label class="mdl-textfield__label" for="minLapTime">Set minLapTime...</label>
-	<span class="mdl-textfield__error">Input is not a number!</span>
-</div>
-<br>
-<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="setMinLapTime">Set</button>
+<form method="post">
+	<div class="mdl-textfield mdl-js-textfield">
+		<input class="mdl-textfield__input" type="text" pattern="-?[0-9]*(\.[0-9]+)?" id="minLapTime" name="minLapTime">
+		<label class="mdl-textfield__label" for="minLapTime">Set minLapTime...</label>
+		<span class="mdl-textfield__error">Input is not a number!</span>
+	</div>
+	<br>
+	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="setMinLapTime">Set</button>
 </form>
 </div>
 </div>

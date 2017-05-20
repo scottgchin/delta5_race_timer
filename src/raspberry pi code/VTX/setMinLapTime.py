@@ -24,10 +24,10 @@ db = MySQLdb.connect("localhost","root","delta5fpv","vtx" )
 cursor = db.cursor()
 
 
-# Get nodes info
+# Get node i2cAddr info
 i2cAddr = []
 try:
-	cursor.execute("SELECT * FROM `nodes`");
+	cursor.execute("SELECT * FROM `nodes`") # Update to remove * and just get i2cAddr
 	numNodes = int(cursor.rowcount)
 	print "numNodes: %d" % numNodes
 	for x in range(0, numNodes):
@@ -45,12 +45,12 @@ except MySQLdb.Warning as e:
 try:
 	# Set arduino nodes
 	for x in range(0, numNodes): # loops for polling each node
-		i2c.write_byte_data(i2cAddr[x], 0x0D, args.minLapTime) # race reset, set lap, min, sec, ms, lastLapTime to 0, raceStatus to 1
-		time.sleep(0.5)
+		i2c.write_byte_data(i2cAddr[x], 0x54, args.minLapTime) # Set min lap time in seconds
+		time.sleep(0.250)
 	
-	# Insert rssiTriggerThreshold into the database
+	# Insert min lap time into the database
 	try:
-		cursor.execute("UPDATE `setup` SET `minLapTime` = %s",(args.minLapTime))
+		cursor.execute("UPDATE `config` SET `minLapTime` = %s",(args.minLapTime))
 		db.commit()
 	except MySQLdb.Error as e:
 		print e

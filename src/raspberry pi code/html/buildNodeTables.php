@@ -2,19 +2,18 @@
 $conn = new mysqli('localhost', 'root', 'delta5fpv', 'vtx');
 if ($conn->connect_error) {	die("Connection error: " . $conn->connect_error); }
 
-
-$results = $conn->query("SELECT * FROM `vtxReference` WHERE 1") or die($conn->error());
-$vtxReference = array();
-$index = 0;
+# Get rssi values
+$results = $conn->query("SELECT `rssi` FROM `nodesMem`") or die($conn->error());
+$rssi = array();
 while ($row = $results->fetch_assoc()) {
-	$vtxReference[] = $row;
-	echo $row[$index]['vtxNum']; # index might not be working, just call column names
-	$index++;
+	$rssi[] = $row['rssi'];
 }
 
-$nodes = $conn->query("SELECT * FROM `nodes` WHERE 1") or die($conn->error());
+# Get node info
+$results = $conn->query("SELECT * FROM `nodes` WHERE 1") or die($conn->error());
 
-while ($node = $nodes->fetch_assoc()) :
+$index = 0;
+while ($node = $results->fetch_assoc()) :
 ?>
 
 <div class="mdl-cell mdl-cell--2-col">
@@ -27,25 +26,16 @@ while ($node = $nodes->fetch_assoc()) :
 </thead>
 <tbody>
 <tr>
-	<td>i2cAddr:</td>
-	<td><?php echo $node['i2cAddr']; ?></td>
-</tr>
-<tr>
-	<td>vtxNum:</td>
-	<td><?php echo $node['vtxNum']; ?></td>
-</tr>
-<tr>
 	<td>Channel:</td>
 	<td><?php
-			$key = array_search($node['vtxNum'], array_column($vtxReference, 'vtxNum'));
-			echo $vtxReference[$key]['vtxChan'];
+			echo $node['vtxChan'];
 			echo " ";
-			echo $vtxReference[$key]['vtxFreq'];
+			echo $node['vtxFreq'];
 		?></td>
 </tr>
 <tr>
 	<td>RSSI:</td>
-	<td><?php echo $node['rssi']; ?></td>
+	<td><?php echo $rssi[$index]; ?></td>
 </tr>
 <tr>
 	<td>Trigger:</td>
@@ -55,4 +45,7 @@ while ($node = $nodes->fetch_assoc()) :
 </table>
 </div>
 
-<?php endwhile ?>
+<?php
+$index++;
+endwhile
+?>
