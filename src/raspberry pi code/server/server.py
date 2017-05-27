@@ -23,7 +23,7 @@ hardwareInterface = get_hardware_interface()
 # the best option based on installed packages.
 async_mode = "gevent"
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='/static')
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, async_mode=async_mode)
 heartbeat_thread = None
@@ -41,6 +41,10 @@ def milliseconds():
 def index():
     template_data = { }
     return render_template('index.html', async_mode=socketio.async_mode, **template_data)
+
+@app.route('/graphs')
+def graphs():
+    return render_template('graphs.html', async_mode=socketio.async_mode)
 
 @socketio.on('connect')
 def connect_handler():
