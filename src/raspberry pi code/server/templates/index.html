@@ -17,7 +17,7 @@
             });
 
             socket.on('heartbeat', function(msg) {
-                append_to_log('on heartbeat ' + JSON.stringify(msg));
+                // append_to_log('on heartbeat ' + JSON.stringify(msg));
                 for (i=0; i<msg.current_rssi.length; i++) {
                     $('#current_rssi_' + i).html(msg.current_rssi[i]);
                 }
