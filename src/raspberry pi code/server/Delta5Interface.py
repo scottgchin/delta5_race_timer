@@ -1,6 +1,8 @@
 import smbus
 import gevent
 
+from Node import Node
+
 READ_RSSI = 0x01
 READ_FREQUENCY = 0x03
 READ_TRIGGER_RSSI = 0x04
@@ -18,16 +20,6 @@ def pack_16(data):
     part_b = (data & 0xFF)
     return [part_a, part_b]
 
-class Node:
-    def __init__(self, i2c_addr):
-        self.i2c_addr = i2c_addr
-        self.frequency = 0
-        self.current_rssi = 0
-        self.trigger_rssi = 0
-
-    def get_settings_json(self):
-        return {'frequency': self.frequency, 'current_rssi': self.current_rssi, 'trigger_rssi': self.trigger_rssi}
-
 class Delta5Interface:
     def __init__(self):
         self.update_thread = None
@@ -41,7 +33,8 @@ class Delta5Interface:
         #     node = Node(addr)
         #     nodes.append(node)
 
-        node = Node(8)
+        node = Node()
+        node.i2cAddr = 8
         self.nodes.append(node)
 
         self.get_frequencies()
@@ -127,3 +120,6 @@ class Delta5Interface:
 
     def get_heartbeat_json(self):
         return { 'current_rssi': [node.current_rssi for node in self.nodes]}
+
+def get_hardware_interface():
+    return Delta5Interface()

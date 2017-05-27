@@ -8,13 +8,15 @@ from flask_socketio import SocketIO, emit, join_room, leave_room, \
     close_room, rooms, disconnect
 from datetime import datetime
 from datetime import timedelta
-from random import randint
 
-import Delta5Interface
+import sys
 
-import smbus
+if sys.platform.lower().startswith('win'):
+    from MockInterface import get_hardware_interface
+elif sys.platform.lower().startswith('linux'):
+    from Delta5Interface import get_hardware_interface
 
-hardwareInterface = Delta5Interface.Delta5Interface()
+hardwareInterface = get_hardware_interface()
 
 # Set this variable to "threading", "eventlet" or "gevent" to test the
 # different async modes, or leave it set to None for the application to choose
