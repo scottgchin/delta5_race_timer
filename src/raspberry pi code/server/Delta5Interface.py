@@ -34,7 +34,7 @@ class Delta5Interface:
         #     nodes.append(node)
 
         node = Node()
-        node.i2cAddr = 8
+        node.i2c_addr = 8
         self.nodes.append(node)
 
         self.get_frequencies()
