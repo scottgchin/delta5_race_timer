@@ -10,6 +10,12 @@ from datetime import datetime
 from datetime import timedelta
 from random import randint
 
+import Delta5Interface
+
+import smbus
+
+hardwareInterface = Delta5Interface.Delta5Interface()
+
 # Set this variable to "threading", "eventlet" or "gevent" to test the
 # different async modes, or leave it set to None for the application to choose
 # the best option based on installed packages.
@@ -18,18 +24,10 @@ async_mode = "gevent"
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, async_mode=async_mode)
-thread = None
+heartbeat_thread = None
 
 firmware_version = {'major': 0, 'minor': 1}
 start_time = datetime.now()
-
-mock_nodes = [
-    {'frequency': 5685, 'current_rssi': 110, 'trigger_rssi': 50},
-    {'frequency': 5760, 'current_rssi': 110, 'trigger_rssi': 50},
-    {'frequency': 5800, 'current_rssi': 110, 'trigger_rssi': 50},
-    {'frequency': 5860, 'current_rssi': 110, 'trigger_rssi': 50},
-    {'frequency': 5905, 'current_rssi': 110, 'trigger_rssi': 50},
-]
 
 # returns the elapsed milliseconds since the start of the program
 def milliseconds():
@@ -39,15 +37,16 @@ def milliseconds():
 
 @app.route('/')
 def index():
-    template_data = { 'nodes': mock_nodes }
+    template_data = { }
     return render_template('index.html', async_mode=socketio.async_mode, **template_data)
 
 @socketio.on('connect')
 def connect_handler():
     print ('connected!!');
-    global thread
-    if (thread is None):
-        thread = gevent.spawn(background_thread)
+    hardwareInterface.start()
+    global heartbeat_thread
+    if (heartbeat_thread is None):
+        heartbeat_thread = gevent.spawn(heartbeat_thread_function)
 
 @socketio.on('disconnect')
 def disconnect_handler():
@@ -63,50 +62,38 @@ def on_get_timestamp():
 
 @socketio.on('get_settings')
 def on_get_settings():
-    return {'nodes': mock_nodes}
-
+    return {'nodes': hardwareInterface.get_settings_json()}
 
 # todo: how should the frequency be sent?
 @socketio.on('set_frequency')
 def on_set_frequency(data):
-    # todo: do this right
     print(data)
     index = data['node']
     frequency = data['frequency']
-    mock_nodes[index]['frequency'] = frequency;
-    emit('frequency_set', {'node': index, 'frequency': mock_nodes[index]['frequency']}, broadcast=True)
+    emit('frequency_set', {'node': index, 'frequency': hardwareInterface.set_frequency_index(index, frequency)}, broadcast=True)
 
-# todo: how should the frequency be sent?
 @socketio.on('set_trigger_rssi')
 def on_set_trigger_rssi(data):
-    # todo: do this right
     print(data)
     index = data['node']
     trigger_rssi = data['trigger_rssi']
-    mock_nodes[index]['trigger_rssi'] = trigger_rssi;
-    emit('trigger_rssi_set', {'node': index, 'trigger_rssi': mock_nodes[index]['trigger_rssi']}, broadcast=True)
+    emit('trigger_rssi_set', {'node': index, 'trigger_rssi': hardwareInterface.set_trigger_rssi_index(index, trigger_rssi)}, broadcast=True)
 
 @socketio.on('capture_trigger_rssi')
 def on_capture_trigger_rssi(data):
     index = data['node']
-    # todo: do this right
-    mock_nodes[index]['trigger_rssi'] = mock_nodes[index]['current_rssi']
-    emit('trigger_rssi_set', {'node': index, 'trigger_rssi': mock_nodes[index]['trigger_rssi']}, broadcast=True)
+    emit('trigger_rssi_set', {'node': index, 'trigger_rssi': hardwareInterface.capture_trigger_rssi_index(index)}, broadcast=True)
 
 @socketio.on('simulate_pass')
 def on_simulate_pass(data):
     index = data['node']
     # todo: how should frequency be sent?
-    emit('pass_record', {'frequency': mock_nodes[index]['frequency'], 'timestamp': milliseconds()}, broadcast=True)
+    emit('pass_record', {'frequency': hardwareInterface.nodes[index].frequency, 'timestamp': milliseconds()}, broadcast=True)
 
-def background_thread():
+def heartbeat_thread_function():
     while True:
-        # todo: do this right
-        for node in mock_nodes:
-            node['current_rssi'] = randint(0,255)
-
-        socketio.emit('heartbeat', {'current_rssi': [node['current_rssi'] for node in mock_nodes]})
-        gevent.sleep(5)
+        socketio.emit('heartbeat', hardwareInterface.get_heartbeat_json())
+        gevent.sleep(1)
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', debug=True)
