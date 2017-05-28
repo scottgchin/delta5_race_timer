@@ -1,5 +1,6 @@
 import smbus
 import gevent
+from gevent.lock import BoundedSemaphore
 
 from Node import Node
 
@@ -10,6 +11,12 @@ READ_LAP = 0x05
 
 WRITE_TRIGGER_RSSI = 0x53
 WRITE_FREQUENCY = 0x56
+
+UPDATE_SLEEP = 0.1
+
+I2C_CHILL_TIME = 0.01
+I2C_RETRY_SLEEP = 0.01
+I2C_RETRY_COUNT = 5
 
 def unpack_16(data):
     result = data[0]
@@ -33,6 +40,9 @@ class Delta5Interface:
     def __init__(self):
         self.update_thread = None
         self.pass_record_callback = None
+        self.hardware_log_callback = None
+
+        self.semaphore = BoundedSemaphore(1)
 
         # Start i2c bus
         self.i2c = smbus.SMBus(1)
@@ -51,16 +61,38 @@ class Delta5Interface:
         self.get_trigger_rssis()
 
     def read_block(self, addr, offset, size):
-        data = self.i2c.read_i2c_block_data(addr, offset, size)
+        success = False
+        retry_count = 0
+        while success == False and retry_count < I2C_RETRY_COUNT:
+            try:
+                with self.semaphore:
+                    data = self.i2c.read_i2c_block_data(addr, offset, size)
+                    success = True
+                    gevent.sleep(I2C_CHILL_TIME)
+            except IOError as err:
+                self.log(err)
+                retry_count = retry_count + 1
+                gevent.sleep(I2C_RETRY_SLEEP)
         return data
 
     def write_block(self, addr, offset, data):
-        self.i2c.write_i2c_block_data(addr, offset, data)
+        success = False
+        retry_count = 0
+        while success == False and retry_count < I2C_RETRY_COUNT:
+            try:
+                with self.semaphore:
+                    self.i2c.write_i2c_block_data(addr, offset, data)
+                    success = True
+                    gevent.sleep(I2C_CHILL_TIME)
+            except IOError as err:
+                self.log(err)
+                retry_count = retry_count + 1
+                gevent.sleep(I2C_RETRY_SLEEP)
 
     def update_loop(self):
         while True:
             self.update()
-            gevent.sleep(0.1)
+            gevent.sleep(UPDATE_SLEEP)
 
     def update(self):
         for node in self.nodes:
@@ -72,7 +104,6 @@ class Delta5Interface:
                 if (callable(self.pass_record_callback)):
                     self.pass_record_callback(node.frequency, ms_since_lap)
                 node.last_lap_id = lap_id
-            gevent.sleep(0.01)
 
     def start(self):
         if self.update_thread is None:
@@ -82,7 +113,6 @@ class Delta5Interface:
     def get_frequencies(self):
         for node in self.nodes:
             self.get_frequency_node(node)
-            gevent.sleep(0.01)
 
     def get_frequency_node(self, node):
         data = self.read_block(node.i2c_addr, READ_FREQUENCY, 2)
@@ -95,13 +125,11 @@ class Delta5Interface:
         node = self.nodes[node_index]
         self.write_block(node.i2c_addr, WRITE_FREQUENCY, pack_16(frequency))
         # TODO: error checking?
-        gevent.sleep(0.01)
         return self.get_frequency_node(node)
 
     def get_trigger_rssis(self):
         for node in self.nodes:
             self.get_trigger_rssi_node(node);
-            gevent.sleep(0.01)
 
     def get_trigger_rssi_node(self, node):
         data = self.read_block(node.i2c_addr, READ_TRIGGER_RSSI, 2)
@@ -112,7 +140,6 @@ class Delta5Interface:
         node = self.nodes[node_index]
         self.write_block(node.i2c_addr, WRITE_TRIGGER_RSSI, pack_16(trigger_rssi))
         # TODO: error checking?
-        gevent.sleep(0.01)
         self.get_trigger_rssi_node(node)
         return node.trigger_rssi
 
@@ -121,8 +148,9 @@ class Delta5Interface:
         return self.set_trigger_rssi_index(node_index, node.current_rssi)
 
     def log(self, message):
-        string = 'Delta5: {0}'.format(message)
-        print(string)
+        if (callable(self.hardware_log_callback)):
+            string = 'Delta5: {0}'.format(message)
+            self.hardware_log_callback(string)
 
     def get_settings_json(self):
         settings = [node.get_settings_json() for node in self.nodes]

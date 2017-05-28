@@ -100,12 +100,19 @@ def pass_record_callback(frequency, ms_since_lap):
     print('Pass record from {0}: {1}'.format(frequency, ms_since_lap))
     socketio.emit('pass_record', {'frequency': frequency, 'timestamp': milliseconds() - ms_since_lap})
 
-hardwareInterface.pass_record_callback = pass_record_callback;
+hardwareInterface.pass_record_callback = pass_record_callback
+
+def hardware_log_callback(message):
+    print(message)
+    socketio.emit('hardware_log', message)
+
+hardwareInterface.hardware_log_callback = hardware_log_callback
 
 def heartbeat_thread_function():
     while True:
         socketio.emit('heartbeat', hardwareInterface.get_heartbeat_json())
-        gevent.sleep(1)
+        hardwareInterface.capture_trigger_rssi_index(0)
+        gevent.sleep(0.5)
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', debug=True)

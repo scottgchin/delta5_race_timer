@@ -28,6 +28,10 @@
                 }
             });
 
+            socket.on('hardware_log', function(msg) {
+                append_to_log('hardware log: ' + msg);
+            });
+
             $('form#get_version').submit(function(event) {
                 socket.emit('get_version', function(msg) {
                     append_to_log('get_version returned ' + JSON.stringify(msg));
