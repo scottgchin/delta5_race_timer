@@ -96,6 +96,12 @@ def on_simulate_pass(data):
     # todo: how should frequency be sent?
     emit('pass_record', {'frequency': hardwareInterface.nodes[index].frequency, 'timestamp': milliseconds()}, broadcast=True)
 
+def pass_record_callback(frequency, ms_since_lap):
+    print('Pass record from {0}: {1}'.format(frequency, ms_since_lap))
+    socketio.emit('pass_record', {'frequency': frequency, 'timestamp': milliseconds() - ms_since_lap})
+
+hardwareInterface.pass_record_callback = pass_record_callback;
+
 def heartbeat_thread_function():
     while True:
         socketio.emit('heartbeat', hardwareInterface.get_heartbeat_json())

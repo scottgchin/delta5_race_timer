@@ -6,6 +6,7 @@ from Node import Node
 READ_RSSI = 0x01
 READ_FREQUENCY = 0x03
 READ_TRIGGER_RSSI = 0x04
+READ_LAP = 0x05
 
 WRITE_TRIGGER_RSSI = 0x53
 WRITE_FREQUENCY = 0x56
@@ -20,9 +21,18 @@ def pack_16(data):
     part_b = (data & 0xFF)
     return [part_a, part_b]
 
+def unpack_32(data):
+    result = data[0]
+    result = (result << 8) | data[1]
+    result = (result << 8) | data[2]
+    result = (result << 8) | data[3]
+    return result
+
+
 class Delta5Interface:
     def __init__(self):
         self.update_thread = None
+        self.pass_record_callback = None
 
         # Start i2c bus
         self.i2c = smbus.SMBus(1)
@@ -54,8 +64,14 @@ class Delta5Interface:
 
     def update(self):
         for node in self.nodes:
-            data = self.read_block(node.i2c_addr, READ_RSSI, 2)
-            node.current_rssi = data[1];
+            data = self.read_block(node.i2c_addr, READ_LAP, 7)
+            lap_id = data[0]
+            ms_since_lap = unpack_32(data[1:])
+            node.current_rssi = unpack_16(data[5:])
+            if lap_id != node.last_lap_id:
+                if (callable(self.pass_record_callback)):
+                    self.pass_record_callback(node.frequency, ms_since_lap)
+                node.last_lap_id = lap_id
             gevent.sleep(0.01)
 
     def start(self):
@@ -80,8 +96,7 @@ class Delta5Interface:
         self.write_block(node.i2c_addr, WRITE_FREQUENCY, pack_16(frequency))
         # TODO: error checking?
         gevent.sleep(0.01)
-        self.get_frequency_node(node)
-        return node.frequency
+        return self.get_frequency_node(node)
 
     def get_trigger_rssis(self):
         for node in self.nodes:
@@ -90,12 +105,12 @@ class Delta5Interface:
 
     def get_trigger_rssi_node(self, node):
         data = self.read_block(node.i2c_addr, READ_TRIGGER_RSSI, 2)
-        node.trigger_rssi = data[0]
+        node.trigger_rssi = unpack_16(data)
         return node.trigger_rssi
 
     def set_trigger_rssi_index(self, node_index, trigger_rssi):
         node = self.nodes[node_index]
-        self.write_block(node.i2c_addr, WRITE_TRIGGER_RSSI, [trigger_rssi])
+        self.write_block(node.i2c_addr, WRITE_TRIGGER_RSSI, pack_16(trigger_rssi))
         # TODO: error checking?
         gevent.sleep(0.01)
         self.get_trigger_rssi_node(node)
@@ -103,11 +118,7 @@ class Delta5Interface:
 
     def capture_trigger_rssi_index(self, node_index):
         node = self.nodes[node_index]
-        self.write_block(node.i2c_addr, WRITE_TRIGGER_RSSI, [node.current_rssi])
-        # TODO: error checking?
-        gevent.sleep(0.01)
-        self.get_trigger_rssi_node(node)
-        return node.trigger_rssi
+        return self.set_trigger_rssi_index(node_index, node.current_rssi)
 
     def log(self, message):
         string = 'Delta5: {0}'.format(message)
