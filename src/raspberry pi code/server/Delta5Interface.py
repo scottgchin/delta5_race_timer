@@ -4,6 +4,7 @@ from gevent.lock import BoundedSemaphore
 
 from Node import Node
 
+READ_ADDRESS = 0x00
 READ_RSSI = 0x01
 READ_FREQUENCY = 0x03
 READ_TRIGGER_RSSI = 0x04
@@ -48,14 +49,19 @@ class Delta5Interface:
         self.i2c = smbus.SMBus(1)
         self.nodes = []
 
-        # i2cAddr = [8]
-        # for index, addr in enumerate(i2cAddr):
-        #     node = Node(addr)
-        #     nodes.append(node)
+        i2c_addrs = [8, 10, 12, 14, 16, 18, 20, 22]
 
-        node = Node()
-        node.i2c_addr = 8
-        self.nodes.append(node)
+        for addr in i2c_addrs:
+            try:
+                self.i2c.read_i2c_block_data(addr, READ_ADDRESS, 1)
+                print ("Node FOUND at address {0}".format(addr))
+                node = Node()
+                node.i2c_addr = addr
+                self.nodes.append(node)
+            except IOError as err:
+                print ("No node at address {0}".format(addr))
+
+            gevent.sleep(I2C_CHILL_TIME)
 
         self.get_frequencies()
         self.get_trigger_rssis()
@@ -63,6 +69,7 @@ class Delta5Interface:
     def read_block(self, addr, offset, size):
         success = False
         retry_count = 0
+        data = None
         while success == False and retry_count < I2C_RETRY_COUNT:
             try:
                 with self.semaphore:
@@ -100,6 +107,10 @@ class Delta5Interface:
             lap_id = data[0]
             ms_since_lap = unpack_32(data[1:])
             node.current_rssi = unpack_16(data[5:])
+
+            if node.current_rssi > 300:
+                self.log(data)
+
             if lap_id != node.last_lap_id:
                 if (callable(self.pass_record_callback)):
                     self.pass_record_callback(node.frequency, ms_since_lap)

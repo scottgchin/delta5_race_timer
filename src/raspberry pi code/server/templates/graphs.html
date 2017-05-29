@@ -81,7 +81,7 @@
             rssi_current_data.datasets = new Array();
 
             socket.on('heartbeat', function(msg) {
-                for (node_index=0; node_index<msg.current_rssi.length; node_index++) {
+                for (node_index=0; node_index<msg.current_rssi.length && node_index < rssi_time_data.datasets.length ; node_index++) {
                     rssi_time_data.datasets[node_index].data.shift();
                     rssi_time_data.datasets[node_index].data.push(msg.current_rssi[node_index]);
                     rssi_current_data.datasets[0].data[node_index] = msg.current_rssi[node_index];

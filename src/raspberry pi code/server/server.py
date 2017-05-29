@@ -111,7 +111,7 @@ hardwareInterface.hardware_log_callback = hardware_log_callback
 def heartbeat_thread_function():
     while True:
         socketio.emit('heartbeat', hardwareInterface.get_heartbeat_json())
-        hardwareInterface.capture_trigger_rssi_index(0)
+        # hardwareInterface.capture_trigger_rssi_index(0)
         gevent.sleep(0.5)
 
 if __name__ == '__main__':
