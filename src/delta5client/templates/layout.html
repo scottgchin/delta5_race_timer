@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="description" content="Delta5 VTX Timer">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+	<title>{% block title %}{% endblock %} - Delta5 VTX Timer</title>
+
+	<!-- Page styles -->
+	<link rel="stylesheet" href="../static/css/lib/material.min.css">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+	<link rel="stylesheet" href="../static/css/styles.css"> <!-- superseding delta5 style sheet -->
+
+	<!-- Script libraries -->
+	<script src="../static/css/lib/material.min.js"></script>
+
+    <!-- Child template head content -->
+    {% block head %}{% endblock %}
+</head>
+	
+<body>
+<div class="mdl-layout mdl-js-layout mdl-layout--fixed-header">
+
+<!--Navigation-->
+<header class="delta5-header mdl-layout__header">
+<div class="delta5-navigation mdl-layout__header-row">
+	<nav class="mdl-navigation">
+		<a class="delta5-navigation mdl-navigation__link" href="index"><button class="delta5-navigation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored">Laps</button></a>
+		<a class="delta5-navigation mdl-navigation__link" href="groups"><button class="delta5-navigation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored">Groups</button></a>
+		<a class="delta5-navigation mdl-navigation__link" href="race"><button class="delta5-navigation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored">Race</button></a>
+		<a class="delta5-navigation mdl-navigation__link" href="settings"><button class="delta5-navigation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored">Settings</button></a>
+	</nav>
+	<div class="mdl-layout-spacer"></div>
+	<nav class="mdl-navigation">
+		<a class="delta5-navigation mdl-navigation__link" href="database"><button class="delta5-navigation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored">Database</button></a>
+	</nav>
+	<span class="mdl-layout-title">
+		<img src="../static/img/delta5fpv.jpg">
+	</span>
+</div>
+</header>
+
+<!--Main content-->
+<main class="mdl-layout__content">
+<div class="page-content">
+
+<!-- Child template main content -->
+{% block content %}{% endblock %}
+
+</div>
+</main>
+
+</div>
+</body>
+
+</html>

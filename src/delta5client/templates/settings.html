@@ -1,0 +1,142 @@
+{% extends "layout.html" %}
+{% block title %}Settings{% endblock %}
+
+{% block head %}
+<!-- Script libraries -->
+<script type="text/javascript" src="../static/js/lib/jquery-3.1.1.js"></script>
+<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.5/socket.io.min.js"></script>
+
+    <script type="text/javascript" charset="utf-8">
+        $(document).ready(function() {
+            var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
+
+            socket.on('heartbeat', function(msg) {
+                for (i = 0; i < msg.current_rssi.length; i++) {
+                    $('#current_rssi_' + i).html(msg.current_rssi[i]);
+                }
+            });
+        });
+    </script>
+
+{% endblock %}
+	
+
+{% block content %}
+<!--System start stop buttons-->
+<div class="delta5-margin">
+<form method="post">
+	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="startSystem">Start System</button>&nbsp;
+	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="stopSystem">Stop System</button>
+</form>
+</div>
+
+<!--System status table-->
+<div id="systemStatus" class="delta5-float">
+	<script type="text/javascript">
+	$(document).ready(function() { setInterval(function() { $('#systemStatus').load('templates/buildSystemStatus.html') }, 1000); } );
+	</script>
+</div>
+<!--Race status table-->
+<div id="raceStatus" class="delta5-float">
+	<script type="text/javascript">
+	$(document).ready(function() { setInterval(function() { $('#raceStatus').load('templates/buildRaceStatus.html') }, 1000); } );
+	</script>
+</div>
+<!--Config min lap time-->
+<div id="configMinLap" class="delta5-float">
+	<script type="text/javascript">
+	$(document).ready(function() { $('#configMinLap').load('templates/buildConfigMinLap.html') } );
+	</script>
+</div>
+<!--Config current group-->
+<div id="configGroup" class="delta5-float">
+	<script type="text/javascript">
+	$(document).ready(function() { $('#configGroup').load('templates/buildConfigGroup.html') } );
+	</script>
+</div>
+<div style="clear: both;"></div>
+
+<!--Current group-->
+<h6>Current Group</h6>
+
+<!--Display the node data-->
+<div id="nodeData">
+<!--Build the legend table first-->
+<div class="delta5-margin delta5-float">
+<table class="delta5-table mdl-data-table mdl-js-data-table mdl-shadow--2dp" style="width: 80px;">
+<thead>
+<tr>
+	<th>Node</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+	<td>RSSI:</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<!--Get node info-->
+<!--{% for nodes in data %}  -->
+
+<!--Build node table-->
+<div class="delta5-margin delta5-float">
+<table class="delta5-table mdl-data-table mdl-js-data-table mdl-shadow--2dp" style="width: 120px;">
+<thead>
+<tr>
+	<th>1</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+	<td><div id="current_rssi_1"></div></td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<!--{% endfor %}-->
+
+<div style="clear: both;"></div>
+</div> <!--End node data-->
+
+<!--Display the current group data-->
+<div id="currentGroup">
+	<script type="text/javascript">
+	$(document).ready(function() { $('#currentGroup').load('templates/buildGroupCurrent.html') } );
+	</script>
+</div>
+
+<!--Show all of the groups with editable tables-->
+<div id="groups">
+	<script type="text/javascript">
+	$(document).ready(function() { $('#groups').load('templates/buildGroupsEdit.html') } );
+	</script>
+</div>
+
+<!--Add group button-->
+<div class="delta5-margin">
+<form method="post">
+	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="addGroup">Add Group</button>
+</form>
+</div>
+
+<!--Show all of the pilots with editable tables-->
+<h6>Pilots</h6>
+<div id="pilots">
+	<script type="text/javascript">
+	$(document).ready(function() { $('#pilots').load('templates/buildPilotsEdit.html') } );
+	</script>
+</div>
+
+<!--Add pilot button-->
+<div class="delta5-margin">
+<form method="post">
+	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="addPilot">Add Pilot</button>
+</form>
+</div>
+
+<div id="log"></div>
+
+{% endblock %}

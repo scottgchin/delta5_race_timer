@@ -11,6 +11,7 @@ from datetime import timedelta
 
 import sys
 
+sys.path.append('../delta5interface')
 if sys.platform.lower().startswith('win'):
     from MockInterface import get_hardware_interface
 elif sys.platform.lower().startswith('linux'):
