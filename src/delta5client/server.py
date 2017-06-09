@@ -60,10 +60,10 @@ def on_get_timestamp():
     '''Returns the elapsed milliseconds since the start of the program.'''
     return {'timestamp': milliseconds()}
 
-@SOCKET_IO.on('get_settings')
-def on_get_settings():
-    '''doc string'''
-    return {'nodes': HARDWARE_INTERFACE.get_settings_json()}
+@SOCKET_IO.on('get_node_data')
+def on_get_node_data():
+    '''Returns node frquency, rssi, and trigger.'''
+    return {'nodes': HARDWARE_INTERFACE.get_node_datas_json()}
 
 # todo: how should the frequency be sent?
 @SOCKET_IO.on('set_frequency')

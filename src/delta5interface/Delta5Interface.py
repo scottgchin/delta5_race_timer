@@ -1,10 +1,10 @@
-'''Delta 5 hardware interface.'''
+'''Delta 5 hardware interface layer.'''
 
-import smbus
-import gevent
-from gevent.lock import BoundedSemaphore
+import smbus # For i2c comms
+import gevent # For threads and timing
+from gevent.lock import BoundedSemaphore # To limit i2c calls
 
-from Node import Node
+from Node import Node # Load the node class representing arduino/rx pairs
 
 READ_ADDRESS = 0x00 # Gets i2c address of arduino (1 byte)
 READ_RSSI = 0x01 # Gets current rssi (2 byte)
@@ -25,8 +25,8 @@ WRITE_TIMING_SERVER_MODE = 0x57 # Sets timing server mode (1 byte)
 UPDATE_SLEEP = 0.1 # Main update loop delay
 
 I2C_CHILL_TIME = 0.05 # Delay after i2c read/write
-I2C_RETRY_SLEEP = 0.05
-I2C_RETRY_COUNT = 5
+I2C_RETRY_SLEEP = 0.05 # Delay for i2c retries
+I2C_RETRY_COUNT = 5 # Limit of i2c retries
 
 def unpack_16(data):
     '''Returns the full variable from 2 bytes input.'''
@@ -57,18 +57,17 @@ def validate_checksum(data):
 
 
 class Delta5Interface:
-    '''doc string'''
+    '''Manages the i2c comms and update loops with the nodes.'''
     def __init__(self):
-        self.update_thread = None
-        self.pass_record_callback = None
-        self.hardware_log_callback = None
-
-        self.semaphore = BoundedSemaphore(1)
+        self.update_thread = None # Thread for running the main update loop
+        self.pass_record_callback = None # Gets added in server.py
+        self.hardware_log_callback = None # Gets added in server.py
 
         self.i2c = smbus.SMBus(1) # Start i2c bus
+        self.semaphore = BoundedSemaphore(1) # Limits i2c to 1 read/write at a time
 
         # Scans all i2c_addrs to populate nodes array
-        self.nodes = []
+        self.nodes = [] # Array to hold each node object
         i2c_addrs = [8, 10, 12, 14, 16, 18, 20, 22] # Software limited to 8 nodes
         for addr in i2c_addrs:
             try:
@@ -78,12 +77,14 @@ class Delta5Interface:
                 node = Node() # New node instance
                 node.i2c_addr = addr # Set current loop i2c_addr
                 self.nodes.append(node) # Add new node to Delta5Interface
-                self.get_frequency_node(node)
+                #self.get_frequency_node(node)
                 #self.get_trigger_rssi_node(node)
                 #self.enable_timing_server_mode(node)
             except IOError as err:
                 print "No node at address {0}".format(addr)
             gevent.sleep(I2C_CHILL_TIME)
+        # Define arrays for frequncies based on number of nodes
+        # For loop to initialize each node with its new frequencies and save to nodes object
 
     def start(self):
         '''Starts main update thread.'''
@@ -92,7 +93,7 @@ class Delta5Interface:
             self.update_thread = gevent.spawn(self.update_loop)
 
     def update_loop(self):
-        '''Main update loop.'''
+        '''Main update loop with timed delay.'''
         while True:
             self.update()
             gevent.sleep(UPDATE_SLEEP)
@@ -103,7 +104,7 @@ class Delta5Interface:
             data = self.read_block(node.i2c_addr, READ_LAPRSSI, 7)
             lap_id = data[0]
             ms_since_lap = unpack_32(data[1:])
-            node.current_rssi = unpack_16(data[5:])
+            node.current_rssi = unpack_16(data[5:]) # Saves rssi to current node
 
             if lap_id != node.last_lap_id:
                 if callable(self.pass_record_callback):
@@ -111,13 +112,13 @@ class Delta5Interface:
                 node.last_lap_id = lap_id
 
     def read_block(self, addr, offset, size):
-        '''doc string'''
+        '''Read i2c data given an address, code, and data size.'''
         success = False
         retry_count = 0
         data = None
         while success is False and retry_count < I2C_RETRY_COUNT:
             try:
-                with self.semaphore:
+                with self.semaphore: # Wait if i2c comms is already in progress
                     data = self.i2c.read_i2c_block_data(addr, offset, size + 1)
                     if validate_checksum(data):
                         success = True
@@ -134,14 +135,14 @@ class Delta5Interface:
         return data
 
     def write_block(self, addr, offset, data):
-        '''doc string'''
+        '''Write i2c data given an address, code, and data.'''
         success = False
         retry_count = 0
         data_with_checksum = data
         data_with_checksum.append(sum(data) & 0xFF)
         while success is False and retry_count < I2C_RETRY_COUNT:
             try:
-                with self.semaphore:
+                with self.semaphore: # Wait if i2c comms is already in progress
                     self.i2c.write_i2c_block_data(addr, offset, data_with_checksum)
                     success = True
                     gevent.sleep(I2C_CHILL_TIME)
@@ -151,7 +152,7 @@ class Delta5Interface:
                 gevent.sleep(I2C_RETRY_SLEEP)
 
     def enable_timing_server_mode(self, node):
-        '''doc string'''
+        '''Sets true the timer server variable on the node.'''
         success = False
         retry_count = 0
 
@@ -169,18 +170,18 @@ class Delta5Interface:
         return node.trigger_rssi
 
     def get_frequencies(self):
-        '''doc string'''
+        '''Not called anywhere?'''
         for node in self.nodes:
             self.get_frequency_node(node)
 
     def get_frequency_node(self, node):
-        '''doc string'''
+        '''Returns the frequency for a given node.'''
         data = self.read_block(node.i2c_addr, READ_FREQUENCY, 2)
         node.frequency = unpack_16(data)
         return node.frequency
 
     def set_frequency_index(self, node_index, frequency):
-        '''doc string'''
+        '''Sets the given frequency to a node based on index number.'''
         success = False
         retry_count = 0
 
@@ -196,12 +197,12 @@ class Delta5Interface:
         return node.frequency
 
     def get_trigger_rssis(self):
-        '''doc string'''
+        '''Not called anywhere?'''
         for node in self.nodes:
             self.get_trigger_rssi_node(node)
 
     def get_trigger_rssi_node(self, node):
-        '''doc string'''
+        '''Returns the trigger for a given node.'''
         data = self.read_block(node.i2c_addr, READ_TRIGGER_RSSI, 2)
         node.trigger_rssi = unpack_16(data)
         return node.trigger_rssi
@@ -233,9 +234,9 @@ class Delta5Interface:
             string = 'Delta5: {0}'.format(message)
             self.hardware_log_callback(string)
 
-    def get_settings_json(self):
+    def get_node_data_json(self):
         '''doc string'''
-        settings = [node.get_settings_json() for node in self.nodes]
+        settings = [node.get_node_data_json() for node in self.nodes]
         return settings
 
     def get_heartbeat_json(self):
