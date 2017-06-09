@@ -1,18 +1,4 @@
-<!doctype html>
-<html lang="en">
-<head>
-	<meta charset="utf-8">
-	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<meta name="description" content="Delta5 VTX Timer.">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
-	<title>Race - Delta5 VTX Timer</title>
 
-	<!-- Page styles -->
-	<link rel="stylesheet" href="styles/mdl/material.min.css">
-	<script src="styles/mdl/material.min.js"></script>
-	<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-	
-	<link rel="stylesheet" href="styles/styles.css"> <!-- superseding delta5 style sheet -->
 	<script type="text/javascript" src="/scripts/jquery-3.1.1.js"></script>
 	
 	<!--Form posting functions	-->
@@ -47,35 +33,12 @@
 	?>
 </head>
 	
-<body>
-<div class="mdl-layout mdl-js-layout mdl-layout--fixed-header">
-
-<!--Navigation-->
-<header class="delta5-header mdl-layout__header">
-<div class="delta5-navigation mdl-layout__header-row">
-	<nav class="mdl-navigation">
-		<a class="delta5-navigation mdl-navigation__link" href="index.php"><button class="delta5-navigation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored">Laps</button></a>
-		<a class="delta5-navigation mdl-navigation__link" href="groups.php"><button class="delta5-navigation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored">Groups</button></a>
-		<a class="delta5-navigation mdl-navigation__link" href="race.php"><button class="delta5-navigation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent">Race</button></a>
-		<a class="delta5-navigation mdl-navigation__link" href="settings.php"><button class="delta5-navigation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored">Settings</button></a>
-	</nav>
-	<div class="mdl-layout-spacer"></div>
-	<nav class="mdl-navigation">
-		<a class="delta5-navigation mdl-navigation__link" href="database.php"><button class="delta5-navigation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored">Database</button></a>
-	</nav>
-	<span class="mdl-layout-title">
-		<img src="images/delta5fpv.jpg">
-	</span>
-</div>
-</header>
 
 <!--Main content-->
 <main class="mdl-layout__content">
 <div class="page-content">
 
-<!--Initial database connection for following sections-->
-<?php $conn = new mysqli('localhost', 'root', 'delta5fpv', 'vtx');
-if ($conn->connect_error) {	die("Connection error: " . $conn->connect_error); } ?>
+
 
 <!--Button for controlling the race-->
 <div class="delta5-margin">
@@ -88,18 +51,49 @@ if ($conn->connect_error) {	die("Connection error: " . $conn->connect_error); } 
 </div>
 
 <!--Race status table-->
-<div id="raceStatus" class="delta5-float">
-	<script type="text/javascript">
-	$(document).ready(function() { setInterval(function() { $('#raceStatus').load('buildRaceStatus.php') }, 1000); } );
-	</script>
+<div class="delta5-margin">
+<table class="delta5-table mdl-data-table mdl-js-data-table mdl-shadow--2dp" style="width: 140px;">
+<tbody>
+<tr>
+	<td>Race:</td>
+	<td>
+		<?php if ($status['raceStatus'] == 0) { echo "Stopped"; }
+		else { echo "Started"; } ?>
+	</td>
+</tr>
+</tbody>
+</table>
 </div>
-<!--Config current group-->
-<div id="configGroup" class="delta5-float">
-	<script type="text/javascript">
-	$(document).ready(function() { $('#configGroup').load('buildConfigGroup.php') } );
-	</script>
-</div>
-<div style="clear: both;"></div>
+
+<!--Change current heat-->
+<table class="delta5-table mdl-data-table mdl-js-data-table mdl-shadow--2dp" style="width: 140px;">
+<tbody>
+<tr>
+	<td>Group:</td>
+	<td>
+	<!--Build the drop down selection to change the group-->
+	<form method="post">
+		<select name="setGroup" onchange="this.form.submit()">
+			<!--Get groups list-->
+			<?php $results = $conn->query("SELECT DISTINCT `group` FROM `groups` ORDER BY `group` ASC") or die($conn->error());
+			$groups = array();
+			while ($row = $results->fetch_assoc()) {
+				$groups[] = $row;
+			} ?>
+			<!--Display the current group first-->
+			<option value="<?php echo $config['group']; ?>"><?php echo $config['group']; ?></option>
+			<!--Build the list of groups-->
+			<?php for ($i = 0; $i < count($groups); $i++): ?>
+			<option value="<?php echo $groups[$i]['group']; ?>">
+				<?php echo $groups[$i]['group']; ?>
+			</option>
+			<?php endfor; ?>
+		</select>
+	</form>
+	</td>
+</tr>
+</tbody>
+</table>
 
 <!--Display the timing clock-->
 <div id="timer">

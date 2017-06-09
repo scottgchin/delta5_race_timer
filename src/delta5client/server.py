@@ -1,4 +1,4 @@
-'''Delta5 timing system client script'''
+'''Delta5 timing system server script'''
 
 import sys
 from datetime import datetime
@@ -33,14 +33,13 @@ def milliseconds():
 
 @APP.route('/')
 def index():
-    '''Route to race summary page.'''
-    template_data = {}
-    return render_template('index.html', async_mode=SOCKET_IO.async_mode, **template_data)
+    '''Route to round summary page.'''
+    return render_template('rounds.html', async_mode=SOCKET_IO.async_mode)
 
 @APP.route('/settings')
 def settings():
     '''Route to settings page.'''
-    return render_template('settings.html', async_mode=SOCKET_IO.async_mode)
+    return render_template('settings.html', async_mode=SOCKET_IO.async_mode, num_nodes=5)
 
 @SOCKET_IO.on('connect')
 def connect_handler():

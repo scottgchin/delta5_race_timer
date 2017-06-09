@@ -3,64 +3,49 @@
 
 {% block head %}
 <!-- Script libraries -->
-<script type="text/javascript" src="../static/js/lib/jquery-3.1.1.js"></script>
-<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.5/socket.io.min.js"></script>
+<script type="text/javascript" src="../static/js/lib/jquery-3.2.1.min.js"></script>
+<script type="text/javascript" src="../static/js/lib/socket.io-1.3.5.min.js"></script>
 
-    <script type="text/javascript" charset="utf-8">
-        $(document).ready(function() {
-            var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
+<script type="text/javascript" charset="utf-8">
+	$(document).ready(function() {
+		var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
 
-            socket.on('heartbeat', function(msg) {
-                for (i = 0; i < msg.current_rssi.length; i++) {
-                    $('#current_rssi_' + i).html(msg.current_rssi[i]);
-                }
-            });
-        });
-    </script>
-
+		socket.on('heartbeat', function(msg) {
+			for (i = 0; i < msg.current_rssi.length; i++) {
+				$('#current_rssi_' + i).html(msg.current_rssi[i]);
+			}
+		});
+	});
+</script>
 {% endblock %}
-	
 
 {% block content %}
+<h6>System Control</h6>
 <!--System start stop buttons-->
 <div class="delta5-margin">
 <form method="post">
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="startSystem">Start System</button>&nbsp;
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="stopSystem">Stop System</button>
+	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="start_system">Start System</button>&nbsp;
+	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="stop_system">Stop System</button>
 </form>
 </div>
 
 <!--System status table-->
-<div id="systemStatus" class="delta5-float">
-	<script type="text/javascript">
-	$(document).ready(function() { setInterval(function() { $('#systemStatus').load('templates/buildSystemStatus.html') }, 1000); } );
-	</script>
+<div id="system_status" class="delta5-margin">
+<table class="delta5-table mdl-data-table mdl-js-data-table mdl-shadow--2dp" style="width: 140px;">
+<tbody>
+<tr>
+	<td>System:</td>
+	<td>
+		Load system running variable here
+	</td>
+</tr>
+</tbody>
+</table>
 </div>
-<!--Race status table-->
-<div id="raceStatus" class="delta5-float">
-	<script type="text/javascript">
-	$(document).ready(function() { setInterval(function() { $('#raceStatus').load('templates/buildRaceStatus.html') }, 1000); } );
-	</script>
-</div>
-<!--Config min lap time-->
-<div id="configMinLap" class="delta5-float">
-	<script type="text/javascript">
-	$(document).ready(function() { $('#configMinLap').load('templates/buildConfigMinLap.html') } );
-	</script>
-</div>
-<!--Config current group-->
-<div id="configGroup" class="delta5-float">
-	<script type="text/javascript">
-	$(document).ready(function() { $('#configGroup').load('templates/buildConfigGroup.html') } );
-	</script>
-</div>
-<div style="clear: both;"></div>
 
-<!--Current group-->
-<h6>Current Group</h6>
-
+<h6>Node Configuration</h6>
 <!--Display the node data-->
-<div id="nodeData">
+<div id="node_data">
 <!--Build the legend table first-->
 <div class="delta5-margin delta5-float">
 <table class="delta5-table mdl-data-table mdl-js-data-table mdl-shadow--2dp" style="width: 80px;">
@@ -71,72 +56,90 @@
 </thead>
 <tbody>
 <tr>
+	<td>I2C Addr:</td>
+</tr>
+<tr>
+	<td>Channel:</td>
+</tr>
+<tr>
 	<td>RSSI:</td>
+</tr>
+<tr>
+	<td>Trigger:</td>
 </tr>
 </tbody>
 </table>
 </div>
-
-<!--Get node info-->
-<!--{% for nodes in data %}  -->
-
-<!--Build node table-->
+<!--Build node tables based on passed number of nodes-->
+{% for node in range(num_nodes) %}
 <div class="delta5-margin delta5-float">
 <table class="delta5-table mdl-data-table mdl-js-data-table mdl-shadow--2dp" style="width: 120px;">
 <thead>
 <tr>
-	<th>1</th>
+	<th>{{ node }}</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-	<td><div id="current_rssi_1"></div></td>
+	<td>i2c addr</td>
+</tr>
+<tr>
+	<td>channel</td>
+</tr>
+<tr>
+	<td><div id="current_rssi_{{ node }}"></div></td>
+</tr>
+<tr>
+	<td>trigger</td>
 </tr>
 </tbody>
 </table>
 </div>
-
-<!--{% endfor %}-->
-
+{% endfor %}
 <div style="clear: both;"></div>
 </div> <!--End node data-->
 
-<!--Display the current group data-->
-<div id="currentGroup">
-	<script type="text/javascript">
-	$(document).ready(function() { $('#currentGroup').load('templates/buildGroupCurrent.html') } );
-	</script>
-</div>
 
-<!--Show all of the groups with editable tables-->
-<div id="groups">
-	<script type="text/javascript">
-	$(document).ready(function() { $('#groups').load('templates/buildGroupsEdit.html') } );
-	</script>
-</div>
 
-<!--Add group button-->
+
+	<!--Form posting functions	-->
+	<?php
+	if (isset($_POST['initializeSystem'])) {
+		$numberOfNodes = htmlentities($_POST['numberOfNodes']);
+		exec("sudo python /home/pi/VTX/initializeSystem.py ".$numberOfNodes);
+	}
+
+	if (isset($_POST['clearSavedRaces'])) {
+		exec("sudo python /home/pi/VTX/clearSavedRaces.py");
+		exec("sudo python /home/pi/VTX/clearLaps.py"); // Also clear current laps
+	}
+
+	if (isset($_POST['resetGroups'])) {
+		exec("sudo python /home/pi/VTX/resetGroups.py");
+		exec("sudo python /home/pi/VTX/setGroup.py 1"); // Then set group 1 to reset nodes
+	}
+
+	if (isset($_POST['resetPilots'])) {
+		exec("sudo python /home/pi/VTX/resetPilots.py");
+	}
+	?>
+
+<h6>Database Commands</h6>
+<!--Clear saved rounds, reset heats, reset pilots-->
 <div class="delta5-margin">
 <form method="post">
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="addGroup">Add Group</button>
+	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="clear_rounds">Clear Rounds</button>&nbsp;
+	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="reset_heats">Reset Heats</button>&nbsp;
+	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="reset_pilots">Reset Pilots</button>
 </form>
 </div>
 
-<!--Show all of the pilots with editable tables-->
-<h6>Pilots</h6>
-<div id="pilots">
-	<script type="text/javascript">
-	$(document).ready(function() { $('#pilots').load('templates/buildPilotsEdit.html') } );
-	</script>
-</div>
-
-<!--Add pilot button-->
+<!--Reset the database-->
+<h6>Reset Database (Warning, destroys all data)</h6>
 <div class="delta5-margin">
 <form method="post">
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="addPilot">Add Pilot</button>
+	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="reset_database">Reset Database</button>
 </form>
 </div>
-
-<div id="log"></div>
 
 {% endblock %}

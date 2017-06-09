@@ -1,3 +1,11 @@
+<!--Initial database connection-->
+<?php $conn = new mysqli('localhost', 'root', 'delta5fpv', 'vtx');
+if ($conn->connect_error) {	die("Connection error: " . $conn->connect_error); } ?>
+
+<!--Get rssi values-->
+<?php $results = $conn->query("SELECT `rssi` FROM `nodesMem`") or die($conn->error());
+$rssi = array();
+while ($row = $results->fetch_assoc()) { $rssi[] = $row['rssi']; } ?>
 
 <!--Build the legend table first-->
 <div class="delta5-margin delta5-float">

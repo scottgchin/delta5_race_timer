@@ -1,4 +1,4 @@
-'''doc string'''
+'''Delta 5 hardware interface.'''
 
 import smbus
 import gevent
@@ -6,37 +6,42 @@ from gevent.lock import BoundedSemaphore
 
 from Node import Node
 
-READ_ADDRESS = 0x00
-READ_RSSI = 0x01
-READ_FREQUENCY = 0x03
-READ_TRIGGER_RSSI = 0x04
-READ_LAP = 0x05
-READ_TIMING_SERVER_MODE = 0x06
+READ_ADDRESS = 0x00 # Gets i2c address of arduino (1 byte)
+READ_RSSI = 0x01 # Gets current rssi (2 byte)
+READ_LAP = 0x02 # Gets lap number (1 byte) and lap time in ms (4 byte)
+READ_FREQUENCY = 0x03 # Gets channel frequency (2 byte)
+READ_TRIGGER_RSSI = 0x04 # Gets rssi trigger (2 byte)
+READ_LAPRSSI = 0x05 # Gets lap number (1 byte) time since last lap (4 byte) current rssi (2 byte)
+READ_TIMING_SERVER_MODE = 0x06 # Gets timing server mode (1 byte)
 
-WRITE_TRIGGER_RSSI = 0x53
-WRITE_FREQUENCY = 0x56
-WRITE_TIMING_SERVER_MODE = 0x57
+WRITE_FULL_RESET_FREQUENCY = 0x51 # Full reset, sets frequency (2 byte)
+WRITE_RACE_REST = 0x52 # Starts a new race (0 byte)
+WRITE_TRIGGER_RSSI = 0x53 # Sets rssi trigger (2 byte)
+WRITE_MIN_LAP_TIME = 0x54 # Sets min lap time (1 byte)
+WRITE_RACE_STATUS = 0x55 # Sets race status (1 byte)
+WRITE_FREQUENCY = 0x56 # Sets frequency (2 byte)
+WRITE_TIMING_SERVER_MODE = 0x57 # Sets timing server mode (1 byte)
 
-UPDATE_SLEEP = 0.1
+UPDATE_SLEEP = 0.1 # Main update loop delay
 
-I2C_CHILL_TIME = 0.05
+I2C_CHILL_TIME = 0.05 # Delay after i2c read/write
 I2C_RETRY_SLEEP = 0.05
 I2C_RETRY_COUNT = 5
 
 def unpack_16(data):
-    '''doc string'''
+    '''Returns the full variable from 2 bytes input.'''
     result = data[0]
     result = (result << 8) | data[1]
     return result
 
 def pack_16(data):
-    '''doc string'''
+    '''Returns a 2 part array from the full variable.'''
     part_a = (data >> 8)
     part_b = (data & 0xFF)
     return [part_a, part_b]
 
 def unpack_32(data):
-    '''doc string'''
+    '''Returns the full variable from 4 bytes input.'''
     result = data[0]
     result = (result << 8) | data[1]
     result = (result << 8) | data[2]
@@ -44,7 +49,7 @@ def unpack_32(data):
     return result
 
 def validate_checksum(data):
-    '''doc string'''
+    '''Returns True if the checksum matches the data.'''
     if data is None:
         return False
     checksum = sum(data[:-1]) & 0xFF
@@ -60,26 +65,24 @@ class Delta5Interface:
 
         self.semaphore = BoundedSemaphore(1)
 
-        # Start i2c bus
-        self.i2c = smbus.SMBus(1)
+        self.i2c = smbus.SMBus(1) # Start i2c bus
+
+        # Scans all i2c_addrs to populate nodes array
         self.nodes = []
-
-        i2c_addrs = [8, 10, 12, 14, 16, 18, 20, 22]
-
+        i2c_addrs = [8, 10, 12, 14, 16, 18, 20, 22] # Software limited to 8 nodes
         for addr in i2c_addrs:
             try:
                 self.i2c.read_i2c_block_data(addr, READ_ADDRESS, 1)
                 print "Node FOUND at address {0}".format(addr)
                 gevent.sleep(I2C_CHILL_TIME)
-                node = Node()
-                node.i2c_addr = addr
-                self.nodes.append(node)
+                node = Node() # New node instance
+                node.i2c_addr = addr # Set current loop i2c_addr
+                self.nodes.append(node) # Add new node to Delta5Interface
                 self.get_frequency_node(node)
-                self.get_trigger_rssi_node(node)
-                self.enable_timing_server_mode(node)
+                #self.get_trigger_rssi_node(node)
+                #self.enable_timing_server_mode(node)
             except IOError as err:
                 print "No node at address {0}".format(addr)
-
             gevent.sleep(I2C_CHILL_TIME)
 
     def start(self):
@@ -97,7 +100,7 @@ class Delta5Interface:
     def update(self):
         '''Updates all node data.'''
         for node in self.nodes:
-            data = self.read_block(node.i2c_addr, READ_LAP, 7)
+            data = self.read_block(node.i2c_addr, READ_LAPRSSI, 7)
             lap_id = data[0]
             ms_since_lap = unpack_32(data[1:])
             node.current_rssi = unpack_16(data[5:])
@@ -240,5 +243,5 @@ class Delta5Interface:
         return {'current_rssi': [node.current_rssi for node in self.nodes]}
 
 def get_hardware_interface():
-    '''doc string'''
+    '''Returns the delta 5 interface object.'''
     return Delta5Interface()
