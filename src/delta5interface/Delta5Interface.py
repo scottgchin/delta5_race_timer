@@ -13,8 +13,7 @@ READ_LAP_TIMESINCE_RSSI = 0x05 # Gets lap (1 byte) time since lap (4 byte) curre
 READ_ALL_RSSI = 0x07 # Get rssi (2 byte) trigger (2 byte) peak (2 byte)
 
 WRITE_FULL_RESET_FREQUENCY = 0x51 # Full reset, sets frequency (2 byte)
-WRITE_RACE_RESET = 0x52 # Starts a new race (0 byte)
-WRITE_RACE_STOP = 0x55 # Sets race status (1 byte)
+WRITE_RACE_STATUS = 0x52 # Starts or stops a race (1 byte)
 
 UPDATE_SLEEP = 0.1 # Main update loop delay
 
@@ -82,15 +81,33 @@ class Delta5Interface:
         frequencies_raceband = [5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917]
         for index, node in enumerate(self.nodes):
             if len(self.nodes) < 7:
-                node.frequency = self.set_frequency_index(index, frequencies_imd_5_6[index])
+                node.frequency = self.set_full_reset_frequency(index, frequencies_imd_5_6[index])
             else:
-                node.frequency = self.set_frequency_index(index, frequencies_raceband[index])
+                node.frequency = self.set_full_reset_frequency(index, frequencies_raceband[index])
+
+    #
+    # Class Functions
+    #
 
     def start(self):
         '''Starts main update thread.'''
         if self.update_thread is None:
             self.log('Starting background thread.')
             self.update_thread = gevent.spawn(self.update_loop)
+
+    def log(self, message):
+        '''Hardware log of messages.'''
+        if callable(self.hardware_log_callback):
+            string = 'Delta 5 Log: {0}'.format(message)
+            self.hardware_log_callback(string)
+
+    def enable_timing_server_mode(self):
+        '''Sets the timer server variable true to using the timer server update loop.'''
+        self.timing_server = True
+
+    #
+    # Update Loops
+    #
 
     def update_loop(self):
         '''Main update loop with timed delay.'''
@@ -104,15 +121,19 @@ class Delta5Interface:
     def update(self):
         '''Updates all node data.'''
         for node in self.nodes:
-            data = self.read_block(node.i2c_addr, READ_LAP_LAPTIME, 7)
-            lap_id = data[0] # Number of completed laps
-            lap_time = unpack_32(data[1:]) # Time of the last completed lap
-            node.current_rssi = unpack_16(data[5:]) # Saves rssi to current node
-
+            lap_data = self.read_block(node.i2c_addr, READ_LAP_LAPTIME, 5)
+            lap_id = lap_data[0] # Number of completed laps
+            lap_time = unpack_32(lap_data[1:]) # Lap time of Last completed lap
             if lap_id != node.last_lap_id:
                 if callable(self.pass_record_callback):
                     self.pass_record_callback(node.frequency, lap_time)
                 node.last_lap_id = lap_id
+
+            rssi_data = self.read_block(node.i2c_addr, READ_ALL_RSSI, 6)
+            # Saves rssi data to current node
+            node.current_rssi = unpack_16(rssi_data[0:])
+            node.trigger_rssi = unpack_16(rssi_data[2:])
+            node.peak_rssi = unpack_16(rssi_data[4:])
 
     def update_timingserver(self):
         '''Updates all node data for timing server.'''
@@ -126,6 +147,10 @@ class Delta5Interface:
                 if callable(self.pass_record_callback):
                     self.pass_record_callback(node.frequency, ms_since_lap)
                 node.last_lap_id = lap_id
+
+    #
+    # I2C Common Functions
+    #
 
     def read_block(self, addr, offset, size):
         '''Read i2c data given an address, code, and data size.'''
@@ -167,87 +192,55 @@ class Delta5Interface:
                 retry_count = retry_count + 1
                 gevent.sleep(I2C_RETRY_SLEEP)
 
+    #
+    # I2C Get Functions
+    #
+
     def get_frequency_node(self, node):
         '''Returns the frequency for a given node.'''
         data = self.read_block(node.i2c_addr, READ_FREQUENCY, 2)
         node.frequency = unpack_16(data)
         return node.frequency
 
-    def set_frequency_index(self, node_index, frequency):
+    #
+    # I2C Set Functions
+    #
+
+    def set_full_reset_frequency(self, node_index, frequency):
         '''Sets the given frequency to a node based on index number.'''
         success = False
         retry_count = 0
 
         node = self.nodes[node_index]
         while success is False and retry_count < I2C_RETRY_COUNT:
-            self.write_block(node.i2c_addr, WRITE_FREQUENCY, pack_16(frequency))
+            self.write_block(node.i2c_addr, WRITE_FULL_RESET_FREQUENCY, pack_16(frequency))
             if self.get_frequency_node(node) == frequency:
                 success = True
             else:
                 retry_count = retry_count + 1
                 self.log('Frequency Not Set ({0})'.format(retry_count))
-
         return node.frequency
 
-    def get_trigger_rssi_node(self, node):
-        '''Returns the trigger for a given node.'''
-        data = self.read_block(node.i2c_addr, READ_TRIGGER_RSSI, 2)
-        node.trigger_rssi = unpack_16(data)
-        return node.trigger_rssi
-
-    def set_trigger_rssi_index(self, node_index, trigger_rssi):
-        '''Sets the given rssi trigger to a node based on index number.'''
-        success = False
-        retry_count = 0
-
-        node = self.nodes[node_index]
-        while success is False and retry_count < I2C_RETRY_COUNT:
-            self.write_block(node.i2c_addr, WRITE_TRIGGER_RSSI, pack_16(trigger_rssi))
-            if self.get_trigger_rssi_node(node) == trigger_rssi:
+    def set_race_status(self, race_status):
+        '''Sets the node to defaults for a new race or stops the race.'''
+        for node in self.nodes:
+            success = False
+            retry_count = 0
+            while success is False and retry_count < I2C_RETRY_COUNT:
+                self.write_block(node.i2c_addr, WRITE_RACE_STATUS, [race_status])
+                # How to check that the race status has changed here?
+                self.log('Race status set ({0})'.format(race_status))
                 success = True
-            else:
-                retry_count = retry_count + 1
-                self.log('RSSI Not Set ({0})'.format(retry_count))
+        return race_status
 
-        return node.trigger_rssi
-
-    def capture_trigger_rssi_index(self, node_index):
-        '''Saves the rssi of the given node index as its rssi trigger value.'''
-        node = self.nodes[node_index]
-        return self.set_trigger_rssi_index(node_index, node.current_rssi)
-
-    def enable_timing_server_mode(self, node):
-        '''Sets true the timer server variable on the node.'''
-        self.timing_server = True
-        success = False
-        retry_count = 0
-
-        while success is False and retry_count < I2C_RETRY_COUNT:
-            self.write_block(node.i2c_addr, WRITE_TIMING_SERVER_MODE, [1])
-            data = self.read_block(node.i2c_addr, READ_TIMING_SERVER_MODE, 1)
-            if  data[0] == 1:
-                print 'Timing Server Mode Set'
-                success = True
-            else:
-                retry_count = retry_count + 1
-                print 'Timing Server Mode Not Set ({0})'.format(retry_count)
-                gevent.sleep(I2C_RETRY_SLEEP)
-        return node.trigger_rssi
-
-    def get_node_data_json(self):
-        '''Returns all nodes frequncy, current rssi, and trigger rssi.'''
-        settings = [node.get_node_data_json() for node in self.nodes]
-        return settings
+    #
+    # Get Node Data Json Functions
+    #
 
     def get_heartbeat_json(self):
-        '''Returns all nodes current rssi.'''
-        return {'current_rssi': [node.current_rssi for node in self.nodes]}
-
-    def log(self, message):
-        ''''''
-        if callable(self.hardware_log_callback):
-            string = 'Delta 5 Log: {0}'.format(message)
-            self.hardware_log_callback(string)
+        '''Returns json node data: frequency, current_rssi, trigger_rssi, peak_rssi.'''
+        node_data = [node.get_node_data_json() for node in self.nodes]
+        return node_data
 
 def get_hardware_interface():
     '''Returns the delta 5 interface object.'''

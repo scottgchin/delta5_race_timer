@@ -10,40 +10,33 @@
 	$(document).ready(function() {
 		var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
 
+		function append_to_log(text) {
+			$('#log').prepend('<br>' + $('<div/>').text(text).html());
+		}
+
+		socket.on('hardware_log', function(msg) {
+			append_to_log('Hardware log: ' + msg);
+		});
+
 		socket.on('heartbeat', function(msg) {
-			for (i = 0; i < msg.current_rssi.length; i++) {
-				$('#current_rssi_' + i).html(msg.current_rssi[i]);
+			// append_to_log('Node data:' + JSON.stringify(msg));
+			// append_to_log('Node data:' + msg[1].frequency);
+			// append_to_log('Node data:' + msg.length);
+			for (i=0; i<msg.length; i++) {
+				$('#frequency_' + i).html(msg[i].frequency);
+				$('#current_rssi_' + i).html(msg[i].current_rssi);
+				$('#trigger_rssi_' + i).html(msg[i].trigger_rssi);
+				$('#peak_rssi_' + i).html(msg[i].peak_rssi);
 			}
 		});
+
 	});
 </script>
 {% endblock %}
 
 {% block content %}
-<h6>System Control</h6>
-<!--System start stop buttons-->
-<div class="delta5-margin">
-<form method="post">
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="start_system">Start System</button>&nbsp;
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="stop_system">Stop System</button>
-</form>
-</div>
 
-<!--System status table-->
-<div id="system_status" class="delta5-margin">
-<table class="delta5-table mdl-data-table mdl-js-data-table mdl-shadow--2dp" style="width: 140px;">
-<tbody>
-<tr>
-	<td>System:</td>
-	<td>
-		Load system running variable here
-	</td>
-</tr>
-</tbody>
-</table>
-</div>
-
-<h6>Node Configuration</h6>
+<h6>Node Data</h6>
 <!--Display the node data-->
 <div id="node_data">
 <!--Build the legend table first-->
@@ -56,9 +49,6 @@
 </thead>
 <tbody>
 <tr>
-	<td>I2C Addr:</td>
-</tr>
-<tr>
 	<td>Channel:</td>
 </tr>
 <tr>
@@ -66,6 +56,9 @@
 </tr>
 <tr>
 	<td>Trigger:</td>
+</tr>
+<tr>
+	<td>Peak:</td>
 </tr>
 </tbody>
 </table>
@@ -81,16 +74,16 @@
 </thead>
 <tbody>
 <tr>
-	<td>i2c addr</td>
-</tr>
-<tr>
-	<td>channel</td>
+	<td><div id="frequency_{{ node }}"></div></td>
 </tr>
 <tr>
 	<td><div id="current_rssi_{{ node }}"></div></td>
 </tr>
 <tr>
-	<td>trigger</td>
+	<td><div id="trigger_rssi_{{ node }}"></div></td>
+</tr>
+<tr>
+	<td><div id="peak_rssi_{{ node }}"></div></td>
 </tr>
 </tbody>
 </table>
@@ -141,5 +134,8 @@
 	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="reset_database">Reset Database</button>
 </form>
 </div>
+
+<h6>Hardware Log</h6>
+<div class="delta5-margin" id="log"></div>
 
 {% endblock %}

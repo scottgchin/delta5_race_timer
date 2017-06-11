@@ -24,9 +24,6 @@ HEARTBEAT_THREAD = None
 
 START_TIME = datetime.now()
 
-# 
-
-
 # App routing locations
 
 @APP.route('/')
@@ -39,11 +36,16 @@ def settings():
     '''Route to settings page.'''
     return render_template('settings.html', async_mode=SOCKET_IO.async_mode, num_nodes=5)
 
+@APP.route('/race')
+def race():
+    '''Route to race management page.'''
+    return render_template('race.html', async_mode=SOCKET_IO.async_mode, num_nodes=5)
+
 # Socket io events
 
 @SOCKET_IO.on('connect')
 def connect_handler():
-    '''Starts the delta 5 interface and starts a heart beat thread to emit rssi values.'''
+    '''Starts the delta 5 interface and starts a heartbeat thread to emit node data.'''
     print 'Client connected.'
     HARDWARE_INTERFACE.start()
     global HEARTBEAT_THREAD
@@ -55,58 +57,30 @@ def disconnect_handler():
     '''Print disconnect event.'''
     print 'Client disconnected.'
 
-@SOCKET_IO.on('get_timestamp')
-def on_get_timestamp():
-    '''Returns the elapsed milliseconds since the start of the program.'''
-    return {'timestamp': milliseconds()}
 
-@SOCKET_IO.on('get_node_data')
-def on_get_node_data():
-    '''Returns node frquency, rssi, and trigger.'''
-    return {'nodes': HARDWARE_INTERFACE.get_node_datas_json()}
 
-# todo: how should the frequency be sent?
 @SOCKET_IO.on('set_frequency')
 def on_set_frequency(data):
-    '''doc string'''
+    '''Gets a node index number and frequency to update on the node.'''
     print data
     node_index = data['node']
     frequency = data['frequency']
     emit('frequency_set', {'node': node_index, 'frequency': \
-        HARDWARE_INTERFACE.set_frequency_index(node_index, frequency)}, broadcast=True)
+        HARDWARE_INTERFACE.set_full_reset_frequency(node_index, frequency)}, broadcast=True)
 
-@SOCKET_IO.on('set_trigger_rssi')
-def on_set_trigger_rssi(data):
-    '''doc string'''
-    print data
-    node_index = data['node']
-    trigger_rssi = data['trigger_rssi']
-    emit('trigger_rssi_set', {'node': node_index, 'trigger_rssi': \
-        HARDWARE_INTERFACE.set_trigger_rssi_index(node_index, trigger_rssi)}, broadcast=True)
-
-@SOCKET_IO.on('capture_trigger_rssi')
-def on_capture_trigger_rssi(data):
-    '''doc string'''
-    node_index = data['node']
-    emit('trigger_rssi_set', {'node': node_index, 'trigger_rssi': \
-        HARDWARE_INTERFACE.capture_trigger_rssi_index(node_index)}, broadcast=True)
-
-@SOCKET_IO.on('simulate_pass')
-def on_simulate_pass(data):
-    '''doc string'''
-    node_index = data['node']
-    # todo: how should frequency be sent?
-    emit('pass_record', {'frequency': HARDWARE_INTERFACE.nodes[node_index].frequency, \
-        'timestamp': milliseconds()}, broadcast=True)
-
+@SOCKET_IO.on('set_race_status')
+def on_race_status(race_status):
+    '''Gets 1 to start a race and 0 to stop a race.'''
+    emit('race_status_set', {'race_status': \
+        HARDWARE_INTERFACE.set_race_status(race_status)}, broadcast=True)
 
 # Functions to also be attached to the delte 5 interface class
 
-def pass_record_callback(frequency, milli_sec_since_lap):
-    '''doc string'''
-    print 'Pass record from {0}: {1}'.format(frequency, milli_sec_since_lap)
+def pass_record_callback(frequency, lap_time):
+    '''Logs and emits a completed lap.'''
+    print 'Pass record from {0}: {1}'.format(frequency, lap_time)
     SOCKET_IO.emit('pass_record', {'frequency': frequency, \
-        'timestamp': milliseconds() - milli_sec_since_lap})
+        'laptime': lap_time})
 
 HARDWARE_INTERFACE.pass_record_callback = pass_record_callback
 
@@ -118,19 +92,10 @@ def hardware_log_callback(message):
 HARDWARE_INTERFACE.hardware_log_callback = hardware_log_callback
 
 def heartbeat_thread_function():
-    '''doc string'''
+    '''Emits 'heartbeat' and json node data: frequency, current_rssi, trigger_rssi, peak_rssi.'''
     while True:
         SOCKET_IO.emit('heartbeat', HARDWARE_INTERFACE.get_heartbeat_json())
         gevent.sleep(0.5)
-
-# Timing server functions
-
-def milliseconds():
-    '''Returns the elapsed milliseconds since the start of the program.'''
-    delta_t = datetime.now() - START_TIME
-    milli_sec = (delta_t.days * 24 * 60 * 60 + delta_t.seconds) * 1000 \
-        + delta_t.microseconds / 1000.0
-    return milli_sec
 
 if __name__ == '__main__':
     SOCKET_IO.run(APP, host='0.0.0.0', debug=True)

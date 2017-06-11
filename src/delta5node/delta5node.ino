@@ -46,11 +46,17 @@ int buttonState = 0;
 // unsigned long rssiRisingTime = 0; // The time the rssi value is registered going above the threshold
 // unsigned long rssiFallingTime = 0; // The time the rssi value is registered going below the threshold
 bool crossing = false; // True when the quad is going through the gate
-int rssiTriggerBandwidth = 5; // Added and subtracted from rssiTrigger, tries to account for noise in rssi
+int rssiTriggerBandwidth = 10; // Added and subtracted from rssiTrigger, tries to account for noise in rssi
 int rssiPeakHold = 0; // The peak rssi seen during a crossing event
 unsigned long rssiPeakHoldTime = 0; // The time of the peak rssi during a crossing event
-int rssiTriggerOffset = 40; // Subtracted from the peak rssi detected, accounts for variabilities crossing the gate
+int rssiTriggerOffset = 20; // Subtracted from the peak rssi detected, accounts for variabilities crossing the gate
 int rssiTriggerMinCheck = 40; // Used to set a low trigger on initialization
+
+// Rssi smoothing variables
+const int rssiSmoothingNumReadings = 50;
+int rssiSmoothing[rssiSmoothingNumReadings];
+int rssiSmoothingIndex = 0;
+long rssiSmoothingTotal = 0;
 
 // Use volatile for variables that will be used in interrupt service routines.
 // "Volatile" instructs the compiler to get a fresh copy of the data rather than try to
@@ -122,6 +128,11 @@ void setup() {
 	commsTable.raceStatus = 0; // True when the race has been started from the raspberry pi
 
 	setRxModule(commsTable.vtxFreq); // Setup rx module to default frequency
+
+	// Initialize rssi smoothing array
+	for (int index = 0; index < rssiSmoothingNumReadings; index++) {
+		rssiSmoothing[index] = 0;
+	}
 }
 
 // Functions for the rx5808 module
@@ -237,17 +248,14 @@ void setRssiThreshold() {
 }
 
 // Read the RSSI value for the current channel
-// In the future this 50pt at a time averaging chould be changed to a running average in the main loop
-// Time how long this function takes to complete
 int rssiRead() {
-	int rssiAvg = 0; // Calculate rssi average
+	// This function with 50 analog reads takes around 5 ms
+	long rssiAvg = 0; // Calculate rssi average
 	for (uint8_t i = 0; i < 50; i++){
 		rssiAvg += analogRead(0); // Pin A0
 	}
-	rssiAvg = rssiAvg/50; // Average of 50 rssi readings
-	//rssiAvg = map(rssiAvg, 1, 350, 1, 255); // Scale rssi readings from 1-350 to 1-255
-	//rssiAvg = constrain(rssiAvg, 1, 255); // Removes values below 1 and higher than 255
-	rssiAvg = constrain(rssiAvg, 1, 32000); // Positive 2 byte limit
+	rssiAvg = (int) (rssiAvg / 50); // Average of 50 rssi readings
+	rssiAvg = constrain(rssiAvg, 1, 32000); // Positive 2 byte limit, not really needed
 	return rssiAvg;
 }
 
@@ -279,21 +287,32 @@ void loop() {
 	//commsTable.raceStatus = 1; // Uncomment for individual node testing
 	//delay(250);
 
-	commsTable.rssi = rssiRead(); // Read the current rssi value from the rx5808 module
+	// Get the next reading
+	rssiSmoothing[rssiSmoothingIndex] = rssiRead();
+	// Advance the index and wrap if at the end
+	rssiSmoothingIndex += 1;
+	if (rssiSmoothingIndex >= rssiSmoothingNumReadings) { rssiSmoothingIndex = 0; }
+	// Calculate and save to comms table the running average
+	rssiSmoothingTotal = 0;
+	for (int index = 0; index < rssiSmoothingNumReadings; index++) {
+		rssiSmoothingTotal += rssiSmoothing[index];
+	}
+	commsTable.rssi = (int) (rssiSmoothingTotal / rssiSmoothingNumReadings);
 
 	// Wait for raceStatus True
 	if (commsTable.raceStatus == 1) {
+		// Find the peak rssi and the time it occured during a crossing event
+		if (crossing == true && commsTable.rssi > rssiPeakHold) {
+			rssiPeakHold = commsTable.rssi;
+			rssiPeakHoldTime = millis();
+		}
 		// Rssi above threshold and quad not already crossing the gate, quad is entering to start gate
 		if ((commsTable.rssi > (commsTable.rssiTrigger + rssiTriggerBandwidth)) && (crossing == false)) {
 			// rssiRisingTime = millis(); // Sets the arduino clock time of the quad approaching the gate
 			// Serial.print("rssiRisingTime: ");
 			// Serial.println(rssiRisingTime);
 			crossing = true; // Quad is going through the gate
-		}
-		// Find the peak rssi and the time it occured during a crossing event
-		if (crossing == true) {
-			rssiPeakHold = commsTable.rssi;
-			rssiPeakHoldTime = millis();
+			Serial.println("Crossing = True");
 		}
 		// Rssi below threshold and quad is crossing the gate, quad has now left the start gate
 		else if ((commsTable.rssi < (commsTable.rssiTrigger - rssiTriggerBandwidth)) && (crossing == true)) {
@@ -301,20 +320,22 @@ void loop() {
 			// Serial.print("rssiFallingTime: ");
 			// Serial.println(rssiFallingTime);
 			crossing = false; // Quad has left the gate
+			Serial.println("Crossing = False");
 
 			// Calculates the completed lap time
 			// commsTable.completedLapTime = rssiRisingTime + (rssiFallingTime - rssiRisingTime)/2 - commsTable.lastLapTimeStamp;
 			commsTable.completedLapTime = rssiPeakHoldTime - commsTable.lastLapTimeStamp;
 
 			commsTable.rssiPeak = rssiPeakHold; // Saves the peak rssi value to the comms table
-			
+			rssiPeakHold = 0;
+
 			// Race starting, this logs the first time through the gate
 			if (commsTable.lastLapTimeStamp == 0) {
 				// Sets the arduino clock time through the gate
 				// commsTable.lastLapTimeStamp = rssiRisingTime + ((rssiFallingTime - rssiRisingTime)/2);
 				commsTable.lastLapTimeStamp = rssiPeakHoldTime;
 				commsTable.rssiTrigger = commsTable.rssiPeak - rssiTriggerOffset; // Sets a new trigger
-				Serial.print("Fly over start!");
+				Serial.println("Fly over start!");
 			}
 			else { // Race is running, this is a lap completed
 				// Records the arduino clock time through the gate
@@ -452,7 +473,7 @@ byte i2cHandleRx(byte command) { // The first byte sent by the I2C master is the
 			if (readAndValidateIoBuffer(2)) { // Confirm expected number of bytes
 				commsTable.vtxFreq = ioBufferRead16();
 				setRxModule(commsTable.vtxFreq); // Shouldn't do this in Interrupt Service Routine
-				commsTable.rssiTrigger = rssiRead() + rssiTriggerMinCheck;
+				commsTable.rssiTrigger = (commsTable.rssi + rssiTriggerMinCheck);
 				commsTable.rssiPeak = 0;
 				commsTable.lap = 0;
 				commsTable.completedLapTime = 0;
@@ -461,20 +482,19 @@ byte i2cHandleRx(byte command) { // The first byte sent by the I2C master is the
 				success = true;
 			}
 			break;
-		case 0x52: // Race reset, start a new race
-			if (readAndValidateIoBuffer(0)) { // Confirm expected number of bytes
-				commsTable.rssiTrigger = rssiRead() + rssiTriggerMinCheck;
-				commsTable.rssiPeak = 0;
-				commsTable.lap = 0;
-				commsTable.completedLapTime = 0;
-				commsTable.lastLapTimeStamp = 0; // Reset to zero to catch first gate fly through again
-				commsTable.raceStatus = 1;
-				success = true;
-			}
-			break;
-		case 0x55: // Stop racing, stop checking and updating laps
-			if (readAndValidateIoBuffer(0)) { // Confirm expected number of bytes
-				commsTable.raceStatus = 0;
+		case 0x52: // Set race status, reset for a new race or stop
+			if (readAndValidateIoBuffer(1)) { // Confirm expected number of bytes
+				commsTable.raceStatus = ioBufferRead8();
+				if (commsTable.raceStatus == 1) {
+					commsTable.rssiTrigger = (commsTable.rssi + rssiTriggerMinCheck);
+					commsTable.rssiPeak = 0;
+					commsTable.lap = 0;
+					commsTable.completedLapTime = 0;
+					commsTable.lastLapTimeStamp = 0; // Reset to zero to catch first gate fly through again
+				}
+				else {
+					commsTable.raceStatus = 0;
+				}
 				success = true;
 			}
 			break;
