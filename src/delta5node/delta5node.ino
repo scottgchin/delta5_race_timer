@@ -43,11 +43,14 @@ const int spiClockPin = 13;
 const int buttonPin = 3; // Arduino D3 as a button to set rssiTriggerThreshold, ground button to press
 int buttonState = 0;
 
-unsigned long rssiRisingTime = 0; // The time the rssi value is registered going above the threshold
-unsigned long rssiFallingTime = 0; // The time the rssi value is registered going below the threshold
+// unsigned long rssiRisingTime = 0; // The time the rssi value is registered going above the threshold
+// unsigned long rssiFallingTime = 0; // The time the rssi value is registered going below the threshold
 bool crossing = false; // True when the quad is going through the gate
-
-int rssiTriggerBandwidth = 10; // Added and subtracted from rssiTrigger, tries to account for noise in rssi
+int rssiTriggerBandwidth = 5; // Added and subtracted from rssiTrigger, tries to account for noise in rssi
+int rssiPeakHold = 0; // The peak rssi seen during a crossing event
+unsigned long rssiPeakHoldTime = 0; // The time of the peak rssi during a crossing event
+int rssiTriggerOffset = 40; // Subtracted from the peak rssi detected, accounts for variabilities crossing the gate
+int rssiTriggerMinCheck = 40; // Used to set a low trigger on initialization
 
 // Use volatile for variables that will be used in interrupt service routines.
 // "Volatile" instructs the compiler to get a fresh copy of the data rather than try to
@@ -56,15 +59,14 @@ int rssiTriggerBandwidth = 10; // Added and subtracted from rssiTrigger, tries t
 // Define data package for i2c comms, variables that can be changed by i2c
 struct {
 	byte volatile command; // I2C code to identify messages
-	int volatile vtxFreq; // Freq in mhz, 2 bytes
+	int volatile vtxFreq; // Frequency in mhz, 2 bytes
 	int volatile rssi; // Current rssi, 2 bytes
-	int volatile rssiTrigger; // Set rssi trigger
+	int volatile rssiTrigger; // Automatically set based on peak rssi value seen, 2 bytes
+	int volatile rssiPeak; // Set rssi trigger, 2 bytes
 	byte volatile lap; // Current lap number
 	unsigned long volatile completedLapTime; // Calculated time of the last completed lap, milliseconds, 4 bytes
 	unsigned long volatile lastLapTimeStamp; // Arduino clock time of the last completed lap, milliseconds, 4 bytes
-	byte volatile minLapTimeSec; // Minimum elapsed time before registering a new lap, seconds
 	byte volatile raceStatus; // True (1) when the race has been started from the raspberry pi, False (0)
-	bool volatile timingServerMode; // Will send all the laps, ignoring lastLapTime and raceStatus, used by the timing server
 } commsTable;
 
 byte volatile ioBuffer[32]; // Data array for sending over i2c, up to 32 bytes per message
@@ -109,24 +111,15 @@ void setup() {
 	Wire.onReceive(i2cReceive); // Trigger 'i2cReceive' function on incoming data
 	Wire.onRequest(i2cTransmit); // Trigger 'i2cTransmit' function for outgoing data, on master request
 
-	// Initialize commsTable
-	switch (i2cSlaveAddress) { // Set IMD-5 (IMD-6 for addr 18) channels based on i2c address
-		case 8: commsTable.vtxFreq = 5685; break;  // E2
-		case 10: commsTable.vtxFreq = 5760; break; // F2
-		case 12: commsTable.vtxFreq = 5800; break; // F4
-		case 14: commsTable.vtxFreq = 5860; break; // F7
-		case 16: commsTable.vtxFreq = 5905; break; // E6
-		case 18: commsTable.vtxFreq = 5645; break; // E4
-		default: commsTable.vtxFreq = 5800; // F4
-	}
+	// Initialize commsTable defaults
+	commsTable.vtxFreq = 5800; // Frequency is set by pi when number of nodes is known
 	commsTable.rssi = 0;
-	commsTable.rssiTrigger = 0;
+	commsTable.rssiTrigger = rssiRead() + rssiTriggerMinCheck; // Sets a low trigger value to ensure capturing the first gate crossing
+	commsTable.rssiPeak = 0;
 	commsTable.lap = 0;
 	commsTable.completedLapTime = 0;
 	commsTable.lastLapTimeStamp = 0;
-	commsTable.minLapTimeSec = 5; // Minimum elapsed time before registering a new lap in seconds
 	commsTable.raceStatus = 0; // True when the race has been started from the raspberry pi
-	commsTable.timingServerMode = false;
 
 	setRxModule(commsTable.vtxFreq); // Setup rx module to default frequency
 }
@@ -267,7 +260,7 @@ void lapCompleted() {
 	over = commsTable.completedLapTime % 60000;
 	s = int(over / 1000);
 	over = over % 1000;
-	ms = int(over/10); // Divide by 10 so that the ms never exceeds 255, i2c byte send limit
+	ms = int(over);
 
 	Serial.println(" ");
 	Serial.print("Lap: ");
@@ -288,35 +281,45 @@ void loop() {
 
 	commsTable.rssi = rssiRead(); // Read the current rssi value from the rx5808 module
 
-	// Wait for non-zero trigger value, elapsed time > minLapTimeSec, raceStatus True
-	bool shouldCheckLap = ((millis() > (commsTable.lastLapTimeStamp + commsTable.minLapTimeSec*1000)) && (commsTable.raceStatus == 1)) || commsTable.timingServerMode;
-	if ((commsTable.rssiTrigger != 0) && shouldCheckLap) {
-		// Rssi above threshold + bandwidth and quad not already crossing the gate
+	// Wait for raceStatus True
+	if (commsTable.raceStatus == 1) {
+		// Rssi above threshold and quad not already crossing the gate, quad is entering to start gate
 		if ((commsTable.rssi > (commsTable.rssiTrigger + rssiTriggerBandwidth)) && (crossing == false)) {
-			rssiRisingTime = millis(); // Sets the arduino clock time of the quad approaching the gate
-			Serial.print("rssiRisingTime: ");
-			Serial.println(rssiRisingTime);
+			// rssiRisingTime = millis(); // Sets the arduino clock time of the quad approaching the gate
+			// Serial.print("rssiRisingTime: ");
+			// Serial.println(rssiRisingTime);
 			crossing = true; // Quad is going through the gate
 		}
-		// Rssi below threshold - bandwidth and quad is crossing the gate
+		// Find the peak rssi and the time it occured during a crossing event
+		if (crossing == true) {
+			rssiPeakHold = commsTable.rssi;
+			rssiPeakHoldTime = millis();
+		}
+		// Rssi below threshold and quad is crossing the gate, quad has now left the start gate
 		else if ((commsTable.rssi < (commsTable.rssiTrigger - rssiTriggerBandwidth)) && (crossing == true)) {
-			rssiFallingTime = millis(); // Sets the arduino clock time of the quad leaving the gate
-			Serial.print("rssiFallingTime: ");
-			Serial.println(rssiFallingTime);
+			// rssiFallingTime = millis(); // Sets the arduino clock time of the quad leaving the gate
+			// Serial.print("rssiFallingTime: ");
+			// Serial.println(rssiFallingTime);
 			crossing = false; // Quad has left the gate
 
 			// Calculates the completed lap time
-			commsTable.completedLapTime = rssiRisingTime + (rssiFallingTime - rssiRisingTime)/2 - commsTable.lastLapTimeStamp;
+			// commsTable.completedLapTime = rssiRisingTime + (rssiFallingTime - rssiRisingTime)/2 - commsTable.lastLapTimeStamp;
+			commsTable.completedLapTime = rssiPeakHoldTime - commsTable.lastLapTimeStamp;
 
+			commsTable.rssiPeak = rssiPeakHold; // Saves the peak rssi value to the comms table
+			
 			// Race starting, this logs the first time through the gate
 			if (commsTable.lastLapTimeStamp == 0) {
 				// Sets the arduino clock time through the gate
-				commsTable.lastLapTimeStamp = rssiRisingTime + ((rssiFallingTime - rssiRisingTime)/2);
+				// commsTable.lastLapTimeStamp = rssiRisingTime + ((rssiFallingTime - rssiRisingTime)/2);
+				commsTable.lastLapTimeStamp = rssiPeakHoldTime;
+				commsTable.rssiTrigger = commsTable.rssiPeak - rssiTriggerOffset; // Sets a new trigger
 				Serial.print("Fly over start!");
 			}
 			else { // Race is running, this is a lap completed
 				// Records the arduino clock time through the gate
-				commsTable.lastLapTimeStamp = rssiRisingTime + ((rssiFallingTime - rssiRisingTime)/2);
+				// commsTable.lastLapTimeStamp = rssiRisingTime + ((rssiFallingTime - rssiRisingTime)/2);
+				commsTable.lastLapTimeStamp = rssiPeakHoldTime;
 				commsTable.lap = commsTable.lap + 1;
 				lapCompleted(); // Serial prints lap time
 			}
@@ -445,21 +448,23 @@ byte i2cHandleRx(byte command) { // The first byte sent by the I2C master is the
 	bool success = false;
 
 	switch (command) {
-		case 0x51: // Full reset, initialize arduinos
+		case 0x51: // Full reset, initialize arduinos, change frequency
 			if (readAndValidateIoBuffer(2)) { // Confirm expected number of bytes
 				commsTable.vtxFreq = ioBufferRead16();
 				setRxModule(commsTable.vtxFreq); // Shouldn't do this in Interrupt Service Routine
-				commsTable.rssiTrigger = 0;
+				commsTable.rssiTrigger = rssiRead() + rssiTriggerMinCheck;
+				commsTable.rssiPeak = 0;
 				commsTable.lap = 0;
 				commsTable.completedLapTime = 0;
 				commsTable.lastLapTimeStamp = 0;
-				commsTable.minLapTimeSec = 5;
 				commsTable.raceStatus = 0;
 				success = true;
 			}
 			break;
 		case 0x52: // Race reset, start a new race
 			if (readAndValidateIoBuffer(0)) { // Confirm expected number of bytes
+				commsTable.rssiTrigger = rssiRead() + rssiTriggerMinCheck;
+				commsTable.rssiPeak = 0;
 				commsTable.lap = 0;
 				commsTable.completedLapTime = 0;
 				commsTable.lastLapTimeStamp = 0; // Reset to zero to catch first gate fly through again
@@ -467,33 +472,9 @@ byte i2cHandleRx(byte command) { // The first byte sent by the I2C master is the
 				success = true;
 			}
 			break;
-		case 0x53: // Set rssiTrigger
-			if (readAndValidateIoBuffer(2)) { // Confirm expected number of bytes
-				commsTable.rssiTrigger = ioBufferRead16();
-				success = true;
-			}
-			break;
-		case 0x54: // Set minLapTime
-			if (readAndValidateIoBuffer(1)) { // Confirm expected number of bytes
-				commsTable.minLapTimeSec = ioBufferRead8();
-				success = true;
-			}
-			break;
-		case 0x55: // Set raceStatus
-			if (readAndValidateIoBuffer(1)) { // Confirm expected number of bytes
-				commsTable.raceStatus = ioBufferRead8();
-				success = true;
-			}
-			break;
-		case 0x56: // Set vtx frequency
-			if (readAndValidateIoBuffer(2)) { // Confirm expected number of bytes
-				commsTable.vtxFreq = ioBufferRead16();
-				setRxModule(commsTable.vtxFreq); // Shouldn't do this in Interrupt Service Routine
-				success = true;
-			}
-		case 0x57: // Set timingServerMode status
-			if (readAndValidateIoBuffer(1)) {
-				commsTable.timingServerMode = ioBufferRead8();
+		case 0x55: // Stop racing, stop checking and updating laps
+			if (readAndValidateIoBuffer(0)) { // Confirm expected number of bytes
+				commsTable.raceStatus = 0;
 				success = true;
 			}
 			break;
@@ -518,9 +499,6 @@ void i2cTransmit() {
 		case 0x00: // Send i2cSlaveAddress
 			ioBufferWrite8(i2cSlaveAddress);
 			break;
-		case 0x01: // Send rssi
-			ioBufferWrite16(commsTable.rssi);
-			break;
 		case 0x02: // Send lap number and calculated lap time in milliseconds
 			ioBufferWrite8(commsTable.lap);
 			ioBufferWrite32(commsTable.completedLapTime);
@@ -528,16 +506,15 @@ void i2cTransmit() {
 		case 0x03: // Send frequency
 			ioBufferWrite16(commsTable.vtxFreq);
 			break;
-		case 0x04: // Send Trigger RSSI
-			ioBufferWrite16(commsTable.rssiTrigger);
-			break;
 		case 0x05: // Send lap number, time since last lap, and current rssi
 			ioBufferWrite8(commsTable.lap);
 			ioBufferWrite32(millis() - commsTable.lastLapTimeStamp);
 			ioBufferWrite16(commsTable.rssi);
 			break;
-		case 0x06: // Send timingServerMode status
-			ioBufferWrite8(commsTable.timingServerMode);
+		case 0x07: // Send all rssi info
+			ioBufferWrite16(commsTable.rssi);
+			ioBufferWrite16(commsTable.rssiTrigger);
+			ioBufferWrite16(commsTable.rssiPeak);
 			break;
 		default: // If an invalid command is sent, write nothing back, master must react
 			Serial.print("TX Fault command: ");
@@ -575,9 +552,6 @@ void printCommsTable() {
 	Serial.println(builder);
 	builder = "  Completed Lap Time: ";
 	builder += commsTable.completedLapTime;
-	Serial.println(builder);
-	builder = "  Min Lap Time (sec): ";
-	builder += commsTable.minLapTimeSec;
 	Serial.println(builder);
 	builder = "  Race Status: ";
 	builder += commsTable.raceStatus;

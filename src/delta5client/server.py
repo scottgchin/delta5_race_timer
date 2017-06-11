@@ -24,12 +24,10 @@ HEARTBEAT_THREAD = None
 
 START_TIME = datetime.now()
 
-def milliseconds():
-    '''Returns the elapsed milliseconds since the start of the program.'''
-    delta_t = datetime.now() - START_TIME
-    milli_sec = (delta_t.days * 24 * 60 * 60 + delta_t.seconds) * 1000 \
-        + delta_t.microseconds / 1000.0
-    return milli_sec
+# 
+
+
+# App routing locations
 
 @APP.route('/')
 def index():
@@ -41,9 +39,11 @@ def settings():
     '''Route to settings page.'''
     return render_template('settings.html', async_mode=SOCKET_IO.async_mode, num_nodes=5)
 
+# Socket io events
+
 @SOCKET_IO.on('connect')
 def connect_handler():
-    '''Print connection event.'''
+    '''Starts the delta 5 interface and starts a heart beat thread to emit rssi values.'''
     print 'Client connected.'
     HARDWARE_INTERFACE.start()
     global HEARTBEAT_THREAD
@@ -99,6 +99,9 @@ def on_simulate_pass(data):
     emit('pass_record', {'frequency': HARDWARE_INTERFACE.nodes[node_index].frequency, \
         'timestamp': milliseconds()}, broadcast=True)
 
+
+# Functions to also be attached to the delte 5 interface class
+
 def pass_record_callback(frequency, milli_sec_since_lap):
     '''doc string'''
     print 'Pass record from {0}: {1}'.format(frequency, milli_sec_since_lap)
@@ -108,7 +111,7 @@ def pass_record_callback(frequency, milli_sec_since_lap):
 HARDWARE_INTERFACE.pass_record_callback = pass_record_callback
 
 def hardware_log_callback(message):
-    '''doc string'''
+    '''Print to the console and emits 'hardware_log' message'''
     print message
     SOCKET_IO.emit('hardware_log', message)
 
@@ -119,6 +122,15 @@ def heartbeat_thread_function():
     while True:
         SOCKET_IO.emit('heartbeat', HARDWARE_INTERFACE.get_heartbeat_json())
         gevent.sleep(0.5)
+
+# Timing server functions
+
+def milliseconds():
+    '''Returns the elapsed milliseconds since the start of the program.'''
+    delta_t = datetime.now() - START_TIME
+    milli_sec = (delta_t.days * 24 * 60 * 60 + delta_t.seconds) * 1000 \
+        + delta_t.microseconds / 1000.0
+    return milli_sec
 
 if __name__ == '__main__':
     SOCKET_IO.run(APP, host='0.0.0.0', debug=True)

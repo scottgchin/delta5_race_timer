@@ -10,5 +10,6 @@ class Node:
 
     def get_node_data_json(self):
         '''doc string'''
-        return {'frequency': self.frequency, 'current_rssi': self.current_rssi, \
+        return {'frequency': self.frequency, \
+            'current_rssi': self.current_rssi, \
             'trigger_rssi': self.trigger_rssi}
