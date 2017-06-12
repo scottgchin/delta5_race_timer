@@ -18,9 +18,28 @@
 				$('#peak_rssi_' + i).html(msg[i].peak_rssi);
 			}
 		});
-		
-		$('form#start_race').submit(function(event) {
+
+		socket.on('race_status_set', function(msg) {
+			$('#race_status').html(msg.race_status);
+		});
+
+		$('button#start_race').click(function(event) {
 			socket.emit('set_race_status', 1);
+			return false;
+		});
+
+		$('button#stop_race').click(function(event) {
+			socket.emit('set_race_status', 0);
+			return false;
+		});
+
+		$('button#save_laps').click(function(event) {
+			socket.emit('save_laps');
+			return false;
+		});
+
+		$('button#clear_laps').click(function(event) {
+			socket.emit('clear_laps');
 			return false;
 		});
 	});
@@ -28,52 +47,13 @@
 {% endblock %}
 
 {% block content %}
-
-
-	
-	<!--Form posting functions	-->
-	<?php
-	// Start and stop the nodes race status
-	if (isset($_POST['startRace'])) 
-		{exec("sudo python /home/pi/VTX/startRace.py > /dev/null 2>/dev/null &"); // Doesn't wait for the exec to finish
-	}
-	if (isset($_POST['stopRace'])) {
-		exec("sudo python /home/pi/VTX/stopRace.py");
-	}
-
-	// Set group
-	if (isset($_POST['setGroup'])) {
-		$newGroup = htmlentities($_POST['setGroup']);
-		exec("sudo python /home/pi/VTX/stopSystem.py");
-		exec("sudo python /home/pi/VTX/setGroup.py ".$newGroup);
-		exec("sudo python /home/pi/VTX/startSystem.py > /dev/null 2>/dev/null &"); // Clean start up again main system loop
-	}
-
-	// Save laps to database and then clear current laps for next race
-	if (isset($_POST['saveLaps'])) {
-		exec("sudo python /home/pi/VTX/stopRace.py"); // If saving laps then race is over
-		exec("sudo python /home/pi/VTX/saveLaps.py");
-		exec("sudo python /home/pi/VTX/clearLaps.py"); // After saving the laps then clear currentLaps
-	}
-
-	// Clear laps for false starts and practice
-	if (isset($_POST['clearLaps']))	{
-		exec("sudo python /home/pi/VTX/clearLaps.py");
-	}
-	?>
-
 <!--Button for controlling the race-->
 <div class="delta5-margin">
-<form id="start_race" method="POST" action="#">
-	<input type="submit" value="Start Race">
-</form>
-<!--<form method="post">
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="start_race">Start Race</button>&nbsp;
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="stop_race">Stop Race</button>&nbsp;
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="save_laps">Save Laps</button>&nbsp;
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="clear_laps">Clear Laps</button>
-</form>
-</div>-->
+<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" id="start_race">Start Race</button>&nbsp;
+<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" id="stop_race">Stop Race</button>&nbsp;
+<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" id="save_laps">Save Laps</button>&nbsp;
+<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" id="clear_laps">Clear Laps</button>
+</div>
 
 <!--Race status table-->
 <div class="delta5-margin">
@@ -81,10 +61,7 @@
 <tbody>
 <tr>
 	<td>Race:</td>
-	<td>
-		<?php if ($status['raceStatus'] == 0) { echo "Stopped"; }
-		else { echo "Started"; } ?>
-	</td>
+	<td><div id="race_status"></div></td>
 </tr>
 </tbody>
 </table>

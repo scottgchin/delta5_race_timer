@@ -59,6 +59,7 @@ class Delta5Interface:
         self.i2c = smbus.SMBus(1) # Start i2c bus
         self.semaphore = BoundedSemaphore(1) # Limits i2c to 1 read/write at a time
 
+        self.num_nodes = 0 # Variable to hold the number of nodes detected
         self.timing_server = False # Timing server starts as false until enabled
 
         # Scans all i2c_addrs to populate nodes array
@@ -75,6 +76,9 @@ class Delta5Interface:
             except IOError as err:
                 print "No node at address {0}".format(addr)
             gevent.sleep(I2C_CHILL_TIME)
+
+        # Update number of nodes
+        self.num_nodes = len(self.nodes)
 
         # Set each nodes frequency, use imd frequncies for 6 or less and race band for 7 or 8
         frequencies_imd_5_6 = [5685, 5760, 5800, 5860, 5905, 5645]
