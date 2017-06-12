@@ -50,6 +50,7 @@ def graphs():
 @socketio.on('connect')
 def connect_handler():
     print ('connected!!');
+    hardwareInterface.enable_timing_server_mode()
     hardwareInterface.start()
     global heartbeat_thread
     if (heartbeat_thread is None):
@@ -67,6 +68,7 @@ def on_get_version():
 def on_get_timestamp():
     return {'timestamp': milliseconds()}
 
+# use the data from heartbeat instead
 @socketio.on('get_settings')
 def on_get_settings():
     return {'nodes': hardwareInterface.get_settings_json()}
@@ -79,6 +81,7 @@ def on_set_frequency(data):
     frequency = data['frequency']
     emit('frequency_set', {'node': index, 'frequency': hardwareInterface.set_frequency_index(index, frequency)}, broadcast=True)
 
+# not needed anymore
 @socketio.on('set_trigger_rssi')
 def on_set_trigger_rssi(data):
     print(data)
@@ -86,6 +89,7 @@ def on_set_trigger_rssi(data):
     trigger_rssi = data['trigger_rssi']
     emit('trigger_rssi_set', {'node': index, 'trigger_rssi': hardwareInterface.set_trigger_rssi_index(index, trigger_rssi)}, broadcast=True)
 
+# not needed anymore
 @socketio.on('capture_trigger_rssi')
 def on_capture_trigger_rssi(data):
     index = data['node']
@@ -109,6 +113,7 @@ def hardware_log_callback(message):
 
 hardwareInterface.hardware_log_callback = hardware_log_callback
 
+# this now has all the node data
 def heartbeat_thread_function():
     while True:
         socketio.emit('heartbeat', hardwareInterface.get_heartbeat_json())
