@@ -148,14 +148,14 @@ class Delta5Interface:
             ms_since_lap = unpack_32(data[1:])
             node.current_rssi = unpack_16(data[5:]) # Saves rssi to current node
 
-            # if lap_id != node.last_lap_id:
-            #     if callable(self.pass_record_callback):
-            #         self.pass_record_callback(node, ms_since_lap)
-            #     node.last_lap_id = lap_id
-            #     # Update to get rssi trigger and peak values as needed
-            #     rssi_data = self.read_block(node.i2c_addr, READ_TRIG_PEAK_RSSI, 4)
-            #     node.trigger_rssi = unpack_16(rssi_data[0:])
-            #     node.peak_rssi = unpack_16(rssi_data[2:])
+            if lap_id != node.last_lap_id:
+                if callable(self.pass_record_callback):
+                    self.pass_record_callback(node, ms_since_lap)
+                node.last_lap_id = lap_id
+                # Update to get rssi trigger and peak values as needed
+                rssi_data = self.read_block(node.i2c_addr, READ_TRIG_PEAK_RSSI, 4)
+                node.trigger_rssi = unpack_16(rssi_data[0:])
+                node.peak_rssi = unpack_16(rssi_data[2:])
     #
     # I2C Common Functions
     #

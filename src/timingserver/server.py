@@ -59,6 +59,7 @@ def connect_handler():
     global heartbeat_thread
     if (heartbeat_thread is None):
         heartbeat_thread = gevent.spawn(heartbeat_thread_function)
+    hardwareInterface.set_race_status(1) # Added - Move this into a race start, re cal command
 
 @socketio.on('disconnect')
 def disconnect_handler():
@@ -75,7 +76,7 @@ def on_get_timestamp():
 @socketio.on('get_settings')
 def on_get_settings():
     # return {'nodes': hardwareInterface.get_settings_json()}
-    return {'nodes': [{'frequency': hardwareInterface.node.frequency, 'current_rssi': hardwareInterface.node.current_rssi, 'trigger_rssi': hardwareInterface.node.trigger_rssi} for hardwareInterface.node in hardwareInterface.nodes]} # Added
+    return {'nodes': [{'frequency': hardwareInterface.node.frequency, 'current_rssi': hardwareInterface.node.current_rssi, 'trigger_rssi': hardwareInterface.node.trigger_rssi} for hardwareInterface.node in hardwareInterface.nodes]} # Added - I know there will be a better way to do this...
 
 
 # todo: how should the frequency be sent?
