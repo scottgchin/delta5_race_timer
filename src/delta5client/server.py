@@ -24,20 +24,13 @@ APP.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
 APP.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 DB = SQLAlchemy(APP)
 SOCKET_IO = SocketIO(APP, async_mode=ASYNC_MODE)
-HEARTBEAT_THREAD = None
+CURRENT_RSSI_THREAD = None
 
 START_TIME = datetime.now()
 
 
 # Database setup
 
-class User(DB.Model):
-    id = DB.Column(DB.Integer, primary_key=True)
-    username = DB.Column(DB.String(80), unique=True, nullable=False)
-    email = DB.Column(DB.String(120), unique=True, nullable=False)
-
-    def __repr__(self):
-        return '<User %r>' % self.username
 
 
 
@@ -60,25 +53,19 @@ def race():
     return render_template('race.html', async_mode=SOCKET_IO.async_mode, \
         num_nodes=HARDWARE_INTERFACE.num_nodes)
 
-# Main program
-
-
-
-
-
-
-
-
 # General socket io events
 
 @SOCKET_IO.on('connect')
 def connect_handler():
-    '''Starts the delta 5 interface and starts a heartbeat thread to emit node data.'''
+    '''Starts the delta 5 interface and starts a CURRENT_RSSI thread to emit node data.'''
     print 'Client connected.'
     HARDWARE_INTERFACE.start()
-    global HEARTBEAT_THREAD
-    if HEARTBEAT_THREAD is None:
-        HEARTBEAT_THREAD = gevent.spawn(heartbeat_thread_function)
+    global CURRENT_RSSI_THREAD
+    if CURRENT_RSSI_THREAD is None:
+        CURRENT_RSSI_THREAD = gevent.spawn(current_rssi_thread_function)
+    emit_frequency()
+    emit_trigger_rssi()
+    emit_peak_rssi()
 
 @SOCKET_IO.on('disconnect')
 def disconnect_handler():
@@ -115,6 +102,26 @@ def on_save_laps():
 def on_clear_laps():
     '''Command to clear the current laps due to false start or practice.'''
 
+# Node data feedback functions
+
+def current_rssi_thread_function():
+    '''Emits 'current_rssi' with json node data.'''
+    while True:
+        SOCKET_IO.emit('current_rssi', HARDWARE_INTERFACE.get_current_rssi_json())
+        gevent.sleep(0.5)
+
+def emit_frequency():
+    '''Emits 'frequency' json node data.'''
+    SOCKET_IO.emit('frequency', HARDWARE_INTERFACE.get_frequency_json())
+
+def emit_trigger_rssi():
+    '''Emits 'trigger_rssi' json node data.'''
+    SOCKET_IO.emit('trigger_rssi', HARDWARE_INTERFACE.get_trigger_rssi_json())
+
+def emit_peak_rssi():
+    '''Emits 'peak_rssi' json node data.'''
+    SOCKET_IO.emit('peak_rssi', HARDWARE_INTERFACE.get_peak_rssi_json())
+
 # Functions to also be attached to the delte 5 interface class
 
 def pass_record_callback(frequency, lap_time):
@@ -122,6 +129,8 @@ def pass_record_callback(frequency, lap_time):
     print 'Pass record from {0}: {1}'.format(frequency, lap_time)
     SOCKET_IO.emit('pass_record', {'frequency': frequency, \
         'laptime': lap_time})
+    emit_trigger_rssi()
+    emit_peak_rssi()
 
 HARDWARE_INTERFACE.pass_record_callback = pass_record_callback
 
@@ -131,12 +140,6 @@ def hardware_log_callback(message):
     SOCKET_IO.emit('hardware_log', message)
 
 HARDWARE_INTERFACE.hardware_log_callback = hardware_log_callback
-
-def heartbeat_thread_function():
-    '''Emits 'heartbeat' and json node data: frequency, current_rssi, trigger_rssi, peak_rssi.'''
-    while True:
-        SOCKET_IO.emit('heartbeat', HARDWARE_INTERFACE.get_heartbeat_json())
-        gevent.sleep(0.5)
 
 if __name__ == '__main__':
     SOCKET_IO.run(APP, host='0.0.0.0', debug=True)

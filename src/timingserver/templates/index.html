@@ -5,13 +5,32 @@
 
     <audio id="buzzer" src="./static/audio/beep.mp3" type="audio/mp3"></audio>
 
-    <script type="text/javascript" src="//code.jquery.com/jquery-1.4.2.min.js"></script>
-    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.5/socket.io.min.js"></script>
+    <script type="text/javascript" src="./static/jquery/jquery-3.1.1.min.js"></script>
+    <script type="text/javascript" src="./static/socket.io/1.3.5/socket.io.min.js"></script>
+    <link rel="stylesheet" href="./static/bootstrap-3.3.7/css/bootstrap.min.css"></link>
+    <script type="text/javascript" src=".//static/bootstrap-3.3.7/js/bootstrap.min.js"></script>
     <script type="text/javascript" charset="utf-8">
+
+        get_version = undefined;
+        get_timestamp = undefined;
+        get_settings = undefined;
+        clear_laps = undefined;
+
         $(document).ready(function() {
             var buzzer = $('#buzzer')[0];
 
             var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
+
+            var num_nodes = 0;
+            var last_lap_timestamp = [];
+
+            function map_range(in_min, in_max, out_min, out_max, value) {
+              return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+            }
+
+            function normalize_rssi(value) {
+                return map_range(0, 300, 0, 100, value);
+            }
 
             function append_to_log(text) {
                 $('#log').prepend('<br>' + $('<div/>').text(text).html());
@@ -25,6 +44,7 @@
                 // append_to_log('on heartbeat ' + JSON.stringify(msg));
                 for (i=0; i<msg.current_rssi.length; i++) {
                     $('#current_rssi_' + i).html(msg.current_rssi[i]);
+                    $('#current_rssi_bar_' + i).css("width", normalize_rssi(msg.current_rssi[i])+'%');
                 }
             });
 
@@ -32,26 +52,37 @@
                 append_to_log('hardware log: ' + msg);
             });
 
-            $('form#get_version').submit(function(event) {
+            get_version = function(event) {
                 socket.emit('get_version', function(msg) {
                     append_to_log('get_version returned ' + JSON.stringify(msg));
                 });
                 return false;
-            });
+            }
 
-            $('form#get_timestamp').submit(function(event) {
+            get_timestamp = function(event) {
                 socket.emit('get_timestamp', function(msg) {
                     append_to_log('get_timestamp returned ' + JSON.stringify(msg));
+
+                    last_lap_timestamp = [];
+                    for (i=0; i<num_nodes; i++) {
+                        last_lap_timestamp.push(msg.timestamp);
+                    }
                 });
                 return false;
-            });
+            }
 
-            $('form#get_settings').submit(function(event) {
+            get_settings = function(event) {
                 socket.emit('get_settings', function(msg) {
                     append_to_log('get_settings returned ' + JSON.stringify(msg));
                 });
                 return false;
-            });
+            }
+
+            clear_laps = function() {
+                for (i=0; i<num_nodes; i++) {
+                    $('#lap_table_' + i).empty();
+                }
+            };
 
             function set_frequency(index) {
                 return function(event) {
@@ -97,25 +128,55 @@
 
             socket.emit('get_settings', function(msg) {
                 const Node = ({frequency, current_rssi, trigger_rssi}, index) => `
-                    <h3>Node ${index}</h3>
-                    Frequency: <span id='frequency_${index}'>${frequency}</span>
-                    <form id="set_frequency_${index}" method="POST" action='#'>
-                        <input type="text" name="frequency_val_${index}" id="frequency_val_${index}" value='${frequency}'>
-                        <input type="submit" value="Set">
-                    </form>
-                    Trigger: <span id='trigger_${index}'>${trigger_rssi}</span>
-                    <form id="set_trigger_${index}" method="POST" action='#'>
-                        <input type="text" name="trigger_val_${index}" id="trigger_val_${index}" value='${trigger_rssi}'>
-                        <input type="submit" value="Set">
-                    </form>
-                    Current RSSI: <span id='current_rssi_${index}'>${current_rssi}</span>
-                    <form id="capture_trigger_rssi_${index}" method="POST" action="#">
-                        <input type="submit" value="Capture Trigger">
-                    </form>
-                    <form id="simulate_pass_${index}" method="POST" action="#">
-                        <input type="submit" value="Simulate Pass">
-                    </form>
+                    <div class='col-md-2'>
+                        <div class='panel panel-default'>
+                            <div class="panel-heading">
+                                <h3 class="panel-title">Node ${index}</h3>
+                            </div>
+                            <div class="panel-body">
+                            <form id="set_frequency_${index}" method="POST" action='#'>
+                                <div class="form-group">
+                                    Frequency: <span id='frequency_${index}'>${frequency}</span>
+                                    <div class="input-group input-group-sm">
+                                        <input class="form-control" type="text" name="frequency_val_${index}" id="frequency_val_${index}" value='${frequency}'>
+                                        <span class="input-group-btn">
+                                            <input class="btn btn-default" type="submit" value="Set">
+                                        </span>
+                                    </div>
+                                </div>
+                            </form>
+                            <form id="set_trigger_${index}" method="POST" action='#'>
+                                <div class="form-group">
+                                    Trigger: <span id='trigger_${index}'>${trigger_rssi}</span>
+                                    <div class="input-group input-group-sm">
+                                        <input class="form-control" type="text" name="trigger_val_${index}" id="trigger_val_${index}" value='${trigger_rssi}'>
+                                        <span class="input-group-btn">
+                                            <input class="btn btn-default" type="submit" value="Set">
+                                        </span>
+                                    </div>
+                                </div>
+                            </form>
+                            <div class="progress">
+                              <div id="current_rssi_bar_${index}" class="progress-bar progress-bar-success" role="progressbar" style="width: 70%">
+                                <span id='current_rssi_${index}'>${current_rssi}</span>
+                              </div>
+                            </div>
+                            <form id="capture_trigger_rssi_${index}" method="POST" action="#">
+                                <input class="btn btn-default btn-sm" type="submit" value="Capture Trigger">
+                            </form>
+                            <form id="simulate_pass_${index}" method="POST" action="#">
+                                <input class="btn btn-default btn-sm" type="submit" value="Simulate Pass">
+                            </form>
+                            </div>
+                            <table class="table">
+                                <tbody id="lap_table_${index}">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 `;
+
+                num_nodes = msg.nodes.length;
 
                 $('#nodes').html(msg.nodes.map(Node).join(''));
 
@@ -127,6 +188,8 @@
                 }
 
                 append_to_log('get_settings returned ' + JSON.stringify(msg));
+
+                get_timestamp();
             });
 
             socket.on('frequency_set', function(msg) {
@@ -139,26 +202,53 @@
                 append_to_log('on trigger_rssi_set ' + JSON.stringify(msg));
             });
 
+            function ms_to_time(s) {
+              // Pad to 2 or 3 digits, default is 2
+              function pad(n, z) {
+                z = z || 2;
+                return ('00' + n).slice(-z);
+              }
+
+              var ms = s % 1000;
+              s = (s - ms) / 1000;
+              var secs = s % 60;
+              s = (s - secs) / 60;
+              var mins = s % 60;
+
+              return pad(mins) + ':' + pad(secs) + '.' + pad(ms, 3);
+            }
+
             socket.on('pass_record', function(msg) {
                 buzzer.play();
+                var lap_table = $('#lap_table_' + msg.node);
+                const Lap = (index, time) => `
+                    <tr>
+                      <td>${index}</td>
+                      <td><p class="text-right">${time}</p></td>
+                    </tr>
+                `;
+
+                var lap_time = msg.timestamp - last_lap_timestamp[msg.node];
+                last_lap_timestamp[msg.node] = msg.timestamp;
+                lap_table.append(Lap(lap_table[0].children.length, ms_to_time(lap_time)));
                 append_to_log('on pass_record ' + JSON.stringify(msg));
             });
         });
     </script>
 </head>
 <body>
-    <div id="nodes"></div>
-    <h3>Global:</h3>
-    <form id="get_version" method="POST" action="#">
-        <input type="submit" value="Get Version">
-    </form>
-    <form id="get_timestamp" method="POST" action="#">
-        <input type="submit" value="Get Timestamp">
-    </form>
-    <form id="get_settings" method="POST" action="#">
-        <input type="submit" value="Get Settings">
-    </form>
-    <h3>Receive:</h3>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-xs-12">
+                <button class="btn" onclick="get_version()">Get Version</button>
+                <button class="btn" onclick="get_timestamp()">Get Timestamp</button>
+                <button class="btn" onclick="get_settings()">Get Settings</button>
+                <button class="btn btn-space btn-danger" onclick="clear_laps()">Clear Laps</button>
+            </div>
+        </div>
+        <div class="row" id="nodes"></div>
+        <h3>Receive:</h3>
     <div id="log"></div>
+</div>
 </body>
 </html>

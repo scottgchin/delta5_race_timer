@@ -18,17 +18,30 @@
 			append_to_log('Hardware log: ' + msg);
 		});
 
-		socket.on('heartbeat', function(msg) {
-			// append_to_log('Node data:' + JSON.stringify(msg));
-			// append_to_log('Node data:' + msg[1].frequency);
-			// append_to_log('Node data:' + msg.length);
-			for (i=0; i<msg.length; i++) {
-				$('#frequency_' + i).html(msg[i].frequency);
-				$('#current_rssi_' + i).html(msg[i].current_rssi);
-				$('#trigger_rssi_' + i).html(msg[i].trigger_rssi);
-				$('#peak_rssi_' + i).html(msg[i].peak_rssi);
+		socket.on('current_rssi', function(msg) {
+			for (i=0; i<msg.current_rssi.length; i++) {
+				$('#current_rssi_' + i).html(msg.current_rssi[i]);
 			}
 		});
+
+		socket.on('frequency', function(msg) {
+			for (i=0; i<msg.frequency.length; i++) {
+				$('#frequency_' + i).html(msg.frequency[i]);
+			}
+		});
+
+		socket.on('trigger_rssi', function(msg) {
+			for (i=0; i<msg.trigger_rssi.length; i++) {
+				$('#trigger_rssi_' + i).html(msg.trigger_rssi[i]);
+			}
+		});
+
+		socket.on('peak_rssi', function(msg) {
+			for (i=0; i<msg.peak_rssi.length; i++) {
+				$('#peak_rssi_' + i).html(msg.peak_rssi[i]);
+			}
+		});
+
 
 	});
 </script>

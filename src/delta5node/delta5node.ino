@@ -519,20 +519,20 @@ void i2cTransmit() {
 		case 0x00: // Send i2cSlaveAddress
 			ioBufferWrite8(i2cSlaveAddress);
 			break;
-		case 0x02: // Send lap number and calculated lap time in milliseconds
+		case 0x02: // Send lap number, calculated lap time in milliseconds, current rssi
 			ioBufferWrite8(commsTable.lap);
 			ioBufferWrite32(commsTable.completedLapTime);
+			ioBufferWrite16(commsTable.rssi);
 			break;
 		case 0x03: // Send frequency
 			ioBufferWrite16(commsTable.vtxFreq);
 			break;
-		case 0x05: // Send lap number, time since last lap, and current rssi
+		case 0x05: // Send lap number, time since last lap, current rssi
 			ioBufferWrite8(commsTable.lap);
 			ioBufferWrite32(millis() - commsTable.lastLapTimeStamp);
 			ioBufferWrite16(commsTable.rssi);
 			break;
-		case 0x07: // Send all rssi info
-			ioBufferWrite16(commsTable.rssi);
+		case 0x07: // Send rssi trigger, rssi peak
 			ioBufferWrite16(commsTable.rssiTrigger);
 			ioBufferWrite16(commsTable.rssiPeak);
 			break;

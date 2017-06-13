@@ -7,10 +7,10 @@ from gevent.lock import BoundedSemaphore # To limit i2c calls
 from Node import Node # Load the node class representing arduino/rx pairs
 
 READ_ADDRESS = 0x00 # Gets i2c address of arduino (1 byte)
-READ_LAP_LAPTIME = 0x02 # Gets lap (1 byte) lap time in ms (4 byte)
+READ_LAP_LAPTIME_RSSI = 0x02 # Gets lap (1 byte) lap time in ms (4 byte) rssi (2 byte)
 READ_FREQUENCY = 0x03 # Gets channel frequency (2 byte)
 READ_LAP_TIMESINCE_RSSI = 0x05 # Gets lap (1 byte) time since lap (4 byte) current rssi (2 byte)
-READ_ALL_RSSI = 0x07 # Get rssi (2 byte) trigger (2 byte) peak (2 byte)
+READ_TRIG_PEAK_RSSI = 0x07 # Get rssi trigger (2 byte) rssi peak (2 byte)
 
 WRITE_FULL_RESET_FREQUENCY = 0x51 # Full reset, sets frequency (2 byte)
 WRITE_RACE_STATUS = 0x52 # Starts or stops a race (1 byte)
@@ -65,13 +65,14 @@ class Delta5Interface:
         # Scans all i2c_addrs to populate nodes array
         self.nodes = [] # Array to hold each node object
         i2c_addrs = [8, 10, 12, 14, 16, 18, 20, 22] # Software limited to 8 nodes
-        for addr in i2c_addrs:
+        for index, addr in enumerate(i2c_addrs):
             try:
                 self.i2c.read_i2c_block_data(addr, READ_ADDRESS, 1)
                 print "Node FOUND at address {0}".format(addr)
                 gevent.sleep(I2C_CHILL_TIME)
                 node = Node() # New node instance
                 node.i2c_addr = addr # Set current loop i2c_addr
+                node.index = index
                 self.nodes.append(node) # Add new node to Delta5Interface
             except IOError as err:
                 print "No node at address {0}".format(addr)
@@ -108,6 +109,7 @@ class Delta5Interface:
     def enable_timing_server_mode(self):
         '''Sets the timer server variable true to using the timer server update loop.'''
         self.timing_server = True
+        print 'Timing server set True.'
 
     #
     # Update Loops
@@ -125,19 +127,18 @@ class Delta5Interface:
     def update(self):
         '''Updates all node data.'''
         for node in self.nodes:
-            lap_data = self.read_block(node.i2c_addr, READ_LAP_LAPTIME, 5)
-            lap_id = lap_data[0] # Number of completed laps
-            lap_time = unpack_32(lap_data[1:]) # Lap time of Last completed lap
+            node_data = self.read_block(node.i2c_addr, READ_LAP_LAPTIME_RSSI, 7)
+            lap_id = node_data[0] # Number of completed laps
+            lap_time = unpack_32(node_data[1:]) # Lap time of Last completed lap
+            node.current_rssi = unpack_16(node_data[5:])
             if lap_id != node.last_lap_id:
                 if callable(self.pass_record_callback):
                     self.pass_record_callback(node.frequency, lap_time)
                 node.last_lap_id = lap_id
-
-            rssi_data = self.read_block(node.i2c_addr, READ_ALL_RSSI, 6)
-            # Saves rssi data to current node
-            node.current_rssi = unpack_16(rssi_data[0:])
-            node.trigger_rssi = unpack_16(rssi_data[2:])
-            node.peak_rssi = unpack_16(rssi_data[4:])
+                # Only get updated trigger and peak values on a new lap
+                rssi_data = self.read_block(node.i2c_addr, READ_TRIG_PEAK_RSSI, 4)
+                node.trigger_rssi = unpack_16(rssi_data[0:])
+                node.peak_rssi = unpack_16(rssi_data[2:])
 
     def update_timingserver(self):
         '''Updates all node data for timing server.'''
@@ -147,11 +148,14 @@ class Delta5Interface:
             ms_since_lap = unpack_32(data[1:])
             node.current_rssi = unpack_16(data[5:]) # Saves rssi to current node
 
-            if lap_id != node.last_lap_id:
-                if callable(self.pass_record_callback):
-                    self.pass_record_callback(node.frequency, ms_since_lap)
-                node.last_lap_id = lap_id
-
+            # if lap_id != node.last_lap_id:
+            #     if callable(self.pass_record_callback):
+            #         self.pass_record_callback(node, ms_since_lap)
+            #     node.last_lap_id = lap_id
+            #     # Update to get rssi trigger and peak values as needed
+            #     rssi_data = self.read_block(node.i2c_addr, READ_TRIG_PEAK_RSSI, 4)
+            #     node.trigger_rssi = unpack_16(rssi_data[0:])
+            #     node.peak_rssi = unpack_16(rssi_data[2:])
     #
     # I2C Common Functions
     #
@@ -238,13 +242,24 @@ class Delta5Interface:
         return race_status
 
     #
-    # Get Node Data Json Functions
+    # Get Json Node Data Functions
     #
 
-    def get_heartbeat_json(self):
-        '''Returns json node data: frequency, current_rssi, trigger_rssi, peak_rssi.'''
-        node_data = [node.get_node_data_json() for node in self.nodes]
-        return node_data
+    def get_frequency_json(self):
+        '''Returns json: frequency.'''
+        return {'frequency': [node.frequency for node in self.nodes]}
+
+    def get_current_rssi_json(self):
+        '''Returns json: current_rssi.'''
+        return {'current_rssi': [node.current_rssi for node in self.nodes]}
+
+    def get_trigger_rssi_json(self):
+        '''Returns json: trigger_rssi.'''
+        return {'trigger_rssi': [node.trigger_rssi for node in self.nodes]}
+
+    def get_peak_rssi_json(self):
+        '''Returns json: peak_rssi.'''
+        return {'peak_rssi': [node.peak_rssi for node in self.nodes]}
 
 def get_hardware_interface():
     '''Returns the delta 5 interface object.'''
