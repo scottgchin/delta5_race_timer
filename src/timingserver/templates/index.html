@@ -95,27 +95,6 @@
                 }
             }
 
-            function set_trigger_rssi(index) {
-                return function(event) {
-                    var data = {
-                        node: index,
-                        trigger_rssi: parseInt($('#trigger_val_' +index).val())
-                    };
-                    socket.emit('set_trigger_rssi', data);
-                    return false;
-                }
-            }
-
-            function capture_trigger_rssi(index) {
-                return function(event) {
-                    var data = {
-                        node: index
-                    };
-                    socket.emit('capture_trigger_rssi', data);
-                    return false;
-                }
-            }
-
             function simulate_pass(index) {
                 return function(event) {
                     var data = {
@@ -148,12 +127,6 @@
                             <form id="set_trigger_${index}" method="POST" action='#'>
                                 <div class="form-group">
                                     Trigger: <span id='trigger_${index}'>${trigger_rssi}</span>
-                                    <div class="input-group input-group-sm">
-                                        <input class="form-control" type="text" name="trigger_val_${index}" id="trigger_val_${index}" value='${trigger_rssi}'>
-                                        <span class="input-group-btn">
-                                            <input class="btn btn-default" type="submit" value="Set">
-                                        </span>
-                                    </div>
                                 </div>
                             </form>
                             <div class="progress">
@@ -161,9 +134,6 @@
                                 <span id='current_rssi_${index}'>${current_rssi}</span>
                               </div>
                             </div>
-                            <form id="capture_trigger_rssi_${index}" method="POST" action="#">
-                                <input class="btn btn-default btn-sm" type="submit" value="Capture Trigger">
-                            </form>
                             <form id="simulate_pass_${index}" method="POST" action="#">
                                 <input class="btn btn-default btn-sm" type="submit" value="Simulate Pass">
                             </form>
@@ -182,8 +152,6 @@
 
                 for (i=0; i<msg.nodes.length; i++) {
                     $('form#set_frequency_' + i).submit(set_frequency(i));
-                    $('form#set_trigger_' + i).submit(set_trigger_rssi(i));
-                    $('form#capture_trigger_rssi_' + i).submit(capture_trigger_rssi(i));
                     $('form#simulate_pass_' + i).submit(simulate_pass(i));
                 }
 

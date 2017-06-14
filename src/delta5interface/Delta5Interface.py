@@ -60,7 +60,6 @@ class Delta5Interface:
         self.semaphore = BoundedSemaphore(1) # Limits i2c to 1 read/write at a time
 
         self.num_nodes = 0 # Variable to hold the number of nodes detected
-        self.timing_server = False # Timing server starts as false until enabled
 
         # Scans all i2c_addrs to populate nodes array
         self.nodes = [] # Array to hold each node object
@@ -106,11 +105,6 @@ class Delta5Interface:
             string = 'Delta 5 Log: {0}'.format(message)
             self.hardware_log_callback(string)
 
-    def enable_timing_server_mode(self):
-        '''Sets the timer server variable true to using the timer server update loop.'''
-        self.timing_server = True
-        print 'Timing server set True.'
-
     #
     # Update Loops
     #
@@ -118,10 +112,7 @@ class Delta5Interface:
     def update_loop(self):
         '''Main update loop with timed delay.'''
         while True:
-            if self.timing_server is True:
-                self.update_timingserver()
-            else:
-                self.update()
+            self.update()
             gevent.sleep(UPDATE_SLEEP)
 
     def update(self):
@@ -140,22 +131,6 @@ class Delta5Interface:
                 node.trigger_rssi = unpack_16(rssi_data[0:])
                 node.peak_rssi = unpack_16(rssi_data[2:])
 
-    def update_timingserver(self):
-        '''Updates all node data for timing server.'''
-        for node in self.nodes:
-            data = self.read_block(node.i2c_addr, READ_LAP_TIMESINCE_RSSI, 7)
-            lap_id = data[0]
-            ms_since_lap = unpack_32(data[1:])
-            node.current_rssi = unpack_16(data[5:]) # Saves rssi to current node
-
-            if lap_id != node.last_lap_id:
-                if callable(self.pass_record_callback):
-                    self.pass_record_callback(node, ms_since_lap)
-                node.last_lap_id = lap_id
-                # Update to get rssi trigger and peak values as needed
-                rssi_data = self.read_block(node.i2c_addr, READ_TRIG_PEAK_RSSI, 4)
-                node.trigger_rssi = unpack_16(rssi_data[0:])
-                node.peak_rssi = unpack_16(rssi_data[2:])
     #
     # I2C Common Functions
     #

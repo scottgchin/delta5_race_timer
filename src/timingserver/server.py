@@ -11,11 +11,10 @@ from datetime import timedelta
 
 import sys
 
-sys.path.append('../delta5interface') # Added
 if sys.platform.lower().startswith('win'):
     from MockInterface import get_hardware_interface
 elif sys.platform.lower().startswith('linux'):
-    from Delta5Interface import get_hardware_interface
+    from TimingServerDelta5Interface import get_hardware_interface
 
 hardwareInterface = get_hardware_interface()
 
@@ -54,12 +53,10 @@ def rssi():
 @socketio.on('connect')
 def connect_handler():
     print ('connected!!');
-    hardwareInterface.enable_timing_server_mode() # Added
     hardwareInterface.start()
     global heartbeat_thread
     if (heartbeat_thread is None):
         heartbeat_thread = gevent.spawn(heartbeat_thread_function)
-    hardwareInterface.set_race_status(1) # Added - Move this into a race start, re cal command
 
 @socketio.on('disconnect')
 def disconnect_handler():
@@ -75,32 +72,14 @@ def on_get_timestamp():
 
 @socketio.on('get_settings')
 def on_get_settings():
-    # return {'nodes': hardwareInterface.get_settings_json()}
-    return {'nodes': [{'frequency': hardwareInterface.node.frequency, 'current_rssi': hardwareInterface.node.current_rssi, 'trigger_rssi': hardwareInterface.node.trigger_rssi} for hardwareInterface.node in hardwareInterface.nodes]} # Added - I know there will be a better way to do this...
+    return {'nodes': hardwareInterface.get_settings_json()}
 
-
-# todo: how should the frequency be sent?
 @socketio.on('set_frequency')
 def on_set_frequency(data):
     print(data)
     index = data['node']
     frequency = data['frequency']
-    # emit('frequency_set', {'node': index, 'frequency': hardwareInterface.set_frequency_index(index, frequency)}, broadcast=True)
     emit('frequency_set', {'node': index, 'frequency': hardwareInterface.set_full_reset_frequency(index, frequency)}, broadcast=True) # Added
-
-# No longer needed
-# @socketio.on('set_trigger_rssi')
-# def on_set_trigger_rssi(data):
-#     print(data)
-#     index = data['node']
-#     trigger_rssi = data['trigger_rssi']
-#     emit('trigger_rssi_set', {'node': index, 'trigger_rssi': hardwareInterface.set_trigger_rssi_index(index, trigger_rssi)}, broadcast=True)
-
-# No longer needed
-# @socketio.on('capture_trigger_rssi')
-# def on_capture_trigger_rssi(data):
-#     index = data['node']
-#     emit('trigger_rssi_set', {'node': index, 'trigger_rssi': hardwareInterface.capture_trigger_rssi_index(index)}, broadcast=True)
 
 @socketio.on('simulate_pass')
 def on_simulate_pass(data):
@@ -122,9 +101,7 @@ hardwareInterface.hardware_log_callback = hardware_log_callback
 
 def heartbeat_thread_function():
     while True:
-        # socketio.emit('heartbeat', hardwareInterface.get_heartbeat_json())
-        socketio.emit('heartbeat', hardwareInterface.get_current_rssi_json()) # Added
-        # hardwareInterface.capture_trigger_rssi_index(0)
+        socketio.emit('heartbeat', hardwareInterface.get_heartbeat_json())
         gevent.sleep(0.5)
 
 if __name__ == '__main__':

@@ -1,6 +1,9 @@
 import gevent
 from random import randint
 
+import sys
+
+sys.path.append('../delta5interface')
 from Node import Node
 
 class MockInterface:
@@ -29,32 +32,25 @@ class MockInterface:
             self.log('starting background thread')
             self.update_thread = gevent.spawn(self.update_loop)
 
-    def set_frequency_index(self, node_index, frequency):
+    def set_full_reset_frequency(self, node_index, frequency):
         node = self.nodes[node_index]
         node.frequency = frequency
         return node.frequency
-
-    def set_trigger_rssi_index(self, node_index, trigger_rssi):
-        node = self.nodes[node_index]
-        node.trigger_rssi = trigger_rssi
-        return node.trigger_rssi
-
-    def capture_trigger_rssi_index(self, node_index):
-        node = self.nodes[node_index]
-        node.trigger_rssi = node.current_rssi
-        return node.trigger_rssi
 
     def log(self, message):
         string = 'MockInterface: {0}'.format(message)
         print(string)
 
+    def get_node_settings_json(self, node):
+        return {'frequency': node.frequency, 'current_rssi': node.current_rssi, 'trigger_rssi': node.trigger_rssi}
+
     def get_settings_json(self):
-        settings = [node.get_settings_json() for node in self.nodes]
-        print(settings)
+        settings = [self.get_node_settings_json(node) for node in self.nodes]
         return settings
 
     def get_heartbeat_json(self):
         return { 'current_rssi': [node.current_rssi for node in self.nodes]}
+
 
 def get_hardware_interface():
     return MockInterface()
