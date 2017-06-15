@@ -1,154 +1,129 @@
-{% extends "layout.html" %}
-{% block title %}Settings{% endblock %}
-
-{% block head %}
-<!-- Script libraries -->
-<script type="text/javascript" src="../static/js/lib/jquery-3.2.1.min.js"></script>
-<script type="text/javascript" src="../static/js/lib/socket.io-1.3.5.min.js"></script>
-
+{% extends "layout.html" %} {% block title %}Settings{% endblock %} {% block head %}
 <script type="text/javascript" charset="utf-8">
-	$(document).ready(function() {
+	$(document).ready(function () {
 		var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
 
 		function append_to_log(text) {
 			$('#log').prepend('<br>' + $('<div/>').text(text).html());
 		}
 
-		socket.on('hardware_log', function(msg) {
+		socket.on('hardware_log', function (msg) {
 			append_to_log('Hardware log: ' + msg);
 		});
 
-		socket.on('current_rssi', function(msg) {
-			for (i=0; i<msg.current_rssi.length; i++) {
+		socket.on('current_rssi', function (msg) {
+			for (i = 0; i < msg.current_rssi.length; i++) {
 				$('#current_rssi_' + i).html(msg.current_rssi[i]);
 			}
 		});
 
-		socket.on('frequency', function(msg) {
-			for (i=0; i<msg.frequency.length; i++) {
+		socket.on('frequency', function (msg) {
+			for (i = 0; i < msg.frequency.length; i++) {
 				$('#frequency_' + i).html(msg.frequency[i]);
 			}
 		});
 
-		socket.on('trigger_rssi', function(msg) {
-			for (i=0; i<msg.trigger_rssi.length; i++) {
+		socket.on('trigger_rssi', function (msg) {
+			for (i = 0; i < msg.trigger_rssi.length; i++) {
 				$('#trigger_rssi_' + i).html(msg.trigger_rssi[i]);
 			}
 		});
 
-		socket.on('peak_rssi', function(msg) {
-			for (i=0; i<msg.peak_rssi.length; i++) {
+		socket.on('peak_rssi', function (msg) {
+			for (i = 0; i < msg.peak_rssi.length; i++) {
 				$('#peak_rssi_' + i).html(msg.peak_rssi[i]);
 			}
 		});
-
-
 	});
+
 </script>
-{% endblock %}
+{% endblock %} {% block content %}
 
-{% block content %}
+<!--Display node data-->
+<h4>Node Data</h4>
 
-<h6>Node Data</h6>
-<!--Display the node data-->
-<div id="node_data">
-<!--Build the legend table first-->
-<div class="delta5-margin delta5-float">
-<table class="delta5-table mdl-data-table mdl-js-data-table mdl-shadow--2dp" style="width: 80px;">
-<thead>
-<tr>
-	<th>Node</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-	<td>Channel:</td>
-</tr>
-<tr>
-	<td>RSSI:</td>
-</tr>
-<tr>
-	<td>Trigger:</td>
-</tr>
-<tr>
-	<td>Peak:</td>
-</tr>
-</tbody>
-</table>
+<div class="container-fluid">
+	{% for node in range(num_nodes) %}
+	<div class='col-xs-6 col-md-2'>
+		<div class='panel panel-default'>
+			<div class="panel-heading">
+				<h4 class="panel-title">{{ node }}</h4>
+			</div>
+			<div class="panel-body">
+
+				<div class="btn-group" role="group" aria-label="...">
+					<div class="btn-group" role="group">
+						<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+      					IMD
+    				</button>
+						<ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
+							<li><a href="#">IMD</a></li>
+							<li><a href="#">A</a></li>
+							<li><a href="#">B</a></li>
+							<li><a href="#">E</a></li>
+							<li><a href="#">F</a></li>
+							<li><a href="#">C</a></li>
+						</ul>
+					</div>
+
+					<div class="btn-group" role="group">
+						<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+      					F4 <div id="frequency_{{ node }}"></div>
+    				</button>
+						<ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
+							<li><a href="#">5800</a></li>
+							<li><a href="#">5800</a></li>
+							<li><a href="#">5800</a></li>
+							<li><a href="#">5800</a></li>
+							<li><a href="#">5800</a></li>
+						</ul>
+					</div>
+				</div>
+				<table class="table">
+					<tr>
+						<td>RSSI</td>
+						<td>
+							<div id="current_rssi_{{ node }}"></div>
+						</td>
+					</tr>
+					<tr>
+						<td>Trigger</td>
+						<td>
+							<div id="trigger_rssi_{{ node }}"></div>
+						</td>
+					</tr>
+					<tr>
+						<td>Peak</td>
+						<td>
+							<div id="peak_rssi_{{ node }}"></div>
+						</td>
+					</tr>
+				</table>
+			</div>
+		</div>
+	</div>
+	{% endfor %}
 </div>
-<!--Build node tables based on passed number of nodes-->
-{% for node in range(num_nodes) %}
-<div class="delta5-margin delta5-float">
-<table class="delta5-table mdl-data-table mdl-js-data-table mdl-shadow--2dp" style="width: 120px;">
-<thead>
-<tr>
-	<th>{{ node }}</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-	<td><div id="frequency_{{ node }}"></div></td>
-</tr>
-<tr>
-	<td><div id="current_rssi_{{ node }}"></div></td>
-</tr>
-<tr>
-	<td><div id="trigger_rssi_{{ node }}"></div></td>
-</tr>
-<tr>
-	<td><div id="peak_rssi_{{ node }}"></div></td>
-</tr>
-</tbody>
-</table>
-</div>
-{% endfor %}
-<div style="clear: both;"></div>
-</div> <!--End node data-->
 
-
-
-
-	<!--Form posting functions	-->
-	<?php
-	if (isset($_POST['initializeSystem'])) {
-		$numberOfNodes = htmlentities($_POST['numberOfNodes']);
-		exec("sudo python /home/pi/VTX/initializeSystem.py ".$numberOfNodes);
-	}
-
-	if (isset($_POST['clearSavedRaces'])) {
-		exec("sudo python /home/pi/VTX/clearSavedRaces.py");
-		exec("sudo python /home/pi/VTX/clearLaps.py"); // Also clear current laps
-	}
-
-	if (isset($_POST['resetGroups'])) {
-		exec("sudo python /home/pi/VTX/resetGroups.py");
-		exec("sudo python /home/pi/VTX/setGroup.py 1"); // Then set group 1 to reset nodes
-	}
-
-	if (isset($_POST['resetPilots'])) {
-		exec("sudo python /home/pi/VTX/resetPilots.py");
-	}
-	?>
-
-<h6>Database Commands</h6>
 <!--Clear saved rounds, reset heats, reset pilots-->
-<div class="delta5-margin">
-<form method="post">
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="clear_rounds">Clear Rounds</button>&nbsp;
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="reset_heats">Reset Heats</button>&nbsp;
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="reset_pilots">Reset Pilots</button>
-</form>
+<h4>Database Commands</h4>
+
+<div>
+	<button type="button" class="btn btn-default" id="clear_rounds">Clear Rounds</button>
+	<button type="button" class="btn btn-default" id="reset_heats">Reset Heats</button>
+	<button type="button" class="btn btn-default" id="reset_pilots">Reset Pilots</button>
 </div>
 
 <!--Reset the database-->
-<h6>Reset Database (Warning, destroys all data)</h6>
-<div class="delta5-margin">
-<form method="post">
-	<button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect" name="reset_database">Reset Database</button>
-</form>
+<h4>Reset Database (Warning, destroys all data)</h4>
+
+<div>
+	<button type="button" class="btn btn-default" id="reset_database">Reset Database</button>
 </div>
 
-<h6>Hardware Log</h6>
-<div class="delta5-margin" id="log"></div>
+<!--Status messages from the timing system-->
+<h4>Hardware Log</h4>
+
+<div id="log"></div>
 
 {% endblock %}
