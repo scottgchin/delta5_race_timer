@@ -93,6 +93,8 @@ def on_race_status(race_status):
     # stopping the race should stop and reset the timer
     emit('race_status_set', {'race_status': \
         HARDWARE_INTERFACE.set_race_status(race_status)}, broadcast=True)
+    emit_trigger_rssi()
+    emit_peak_rssi()
 
 @SOCKET_IO.on('save_laps')
 def on_save_laps():
@@ -124,11 +126,10 @@ def emit_peak_rssi():
 
 # Functions to also be attached to the delte 5 interface class
 
-def pass_record_callback(frequency, lap_time):
+def pass_record_callback(node_index, lap_time):
     '''Logs and emits a completed lap.'''
-    print 'Pass record from {0}: {1}'.format(frequency, lap_time)
-    SOCKET_IO.emit('pass_record', {'frequency': frequency, \
-        'laptime': lap_time})
+    print 'Pass record from node {0}, lap time {1}'.format(node_index, lap_time)
+    SOCKET_IO.emit('pass_record', {'node': node_index, 'laptime': lap_time})
     emit_trigger_rssi()
     emit_peak_rssi()
 

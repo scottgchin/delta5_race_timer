@@ -59,8 +59,6 @@ class Delta5Interface:
         self.i2c = smbus.SMBus(1) # Start i2c bus
         self.semaphore = BoundedSemaphore(1) # Limits i2c to 1 read/write at a time
 
-        self.num_nodes = 0 # Variable to hold the number of nodes detected
-
         # Scans all i2c_addrs to populate nodes array
         self.nodes = [] # Array to hold each node object
         i2c_addrs = [8, 10, 12, 14, 16, 18, 20, 22] # Software limited to 8 nodes
@@ -69,25 +67,17 @@ class Delta5Interface:
                 self.i2c.read_i2c_block_data(addr, READ_ADDRESS, 1)
                 print "Node FOUND at address {0}".format(addr)
                 gevent.sleep(I2C_CHILL_TIME)
-                node = Node() # New node instance
-                node.i2c_addr = addr # Set current loop i2c_addr
+                node = Node() # New node object
+                node.i2c_addr = addr
                 node.index = index
                 self.nodes.append(node) # Add new node to Delta5Interface
             except IOError as err:
                 print "No node at address {0}".format(addr)
             gevent.sleep(I2C_CHILL_TIME)
+        self.num_nodes = len(self.nodes) # Save the number of nodes detected
 
-        # Update number of nodes
-        self.num_nodes = len(self.nodes)
-
-        # Set each nodes frequency, use imd frequncies for 6 or less and race band for 7 or 8
-        frequencies_imd_5_6 = [5685, 5760, 5800, 5860, 5905, 5645]
-        frequencies_raceband = [5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917]
-        for index, node in enumerate(self.nodes):
-            if len(self.nodes) < 7:
-                node.frequency = self.set_full_reset_frequency(index, frequencies_imd_5_6[index])
-            else:
-                node.frequency = self.set_full_reset_frequency(index, frequencies_raceband[index])
+        print "Setting default frequencies."
+        self.default_frequencies() # This should be moved out of init to optionally be called
 
     #
     # Class Functions
@@ -105,6 +95,16 @@ class Delta5Interface:
             string = 'Delta 5 Log: {0}'.format(message)
             self.hardware_log_callback(string)
 
+    def default_frequencies(self):
+        '''Set each nodes frequency, use imd frequncies for 6 or less and race band for 7 or 8'''
+        frequencies_imd_5_6 = [5685, 5760, 5800, 5860, 5905, 5645]
+        frequencies_raceband = [5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917]
+        for index, node in enumerate(self.nodes):
+            if self.num_nodes < 7:
+                node.frequency = self.set_full_reset_frequency(index, frequencies_imd_5_6[index])
+            else:
+                node.frequency = self.set_full_reset_frequency(index, frequencies_raceband[index])
+
     #
     # Update Loops
     #
@@ -118,18 +118,12 @@ class Delta5Interface:
     def update(self):
         '''Updates all node data.'''
         for node in self.nodes:
-            node_data = self.read_block(node.i2c_addr, READ_LAP_LAPTIME_RSSI, 7)
-            lap_id = node_data[0] # Number of completed laps
-            lap_time = unpack_32(node_data[1:]) # Lap time of Last completed lap
-            node.current_rssi = unpack_16(node_data[5:])
-            if lap_id != node.last_lap_id:
+            current_lap = node.last_lap_id
+            self.get_lap_laptime_rssi(node.index)
+            if node.last_lap_id != current_lap:
                 if callable(self.pass_record_callback):
-                    self.pass_record_callback(node.frequency, lap_time)
-                node.last_lap_id = lap_id
-                # Only get updated trigger and peak values on a new lap
-                rssi_data = self.read_block(node.i2c_addr, READ_TRIG_PEAK_RSSI, 4)
-                node.trigger_rssi = unpack_16(rssi_data[0:])
-                node.peak_rssi = unpack_16(rssi_data[2:])
+                    self.pass_record_callback(node.index, node.last_lap_time)
+                self.get_trig_peak_rssi(node.index) # Get updated values
 
     #
     # I2C Common Functions
@@ -147,16 +141,16 @@ class Delta5Interface:
                     if validate_checksum(data):
                         success = True
                         gevent.sleep(I2C_CHILL_TIME)
-                        data = data[:-1]
+                        data = data[:-1] # Save the data array without the checksum from the end
                     else:
-                        self.log('Invalid Checksum ({0}): {1}'.format(retry_count, data))
                         retry_count = retry_count + 1
+                        self.log('Bad checksum, retrying {0}, data {1}'.format(retry_count, data))
                         gevent.sleep(I2C_RETRY_SLEEP)
             except IOError as err:
                 self.log(err)
                 retry_count = retry_count + 1
                 gevent.sleep(I2C_RETRY_SLEEP)
-        return data
+        return data # What happens if the i2c read fails every time? Does it return garbage data? Should it return 'None'?
 
     def write_block(self, addr, offset, data):
         '''Write i2c data given an address, code, and data.'''
@@ -179,11 +173,38 @@ class Delta5Interface:
     # I2C Get Functions
     #
 
-    def get_frequency_node(self, node):
-        '''Returns the frequency for a given node.'''
-        data = self.read_block(node.i2c_addr, READ_FREQUENCY, 2)
-        node.frequency = unpack_16(data)
+    def get_lap_laptime_rssi(self, node_index):
+        '''Gets and updates the nodes lap count, lap time, and rssi.'''
+        node = self.nodes[node_index]
+        node_data = self.read_block(node.i2c_addr, READ_LAP_LAPTIME_RSSI, 7)
+        node.last_lap_id = node_data[0] # Number of completed laps
+        node.last_lap_time = unpack_32(node_data[1:]) # Lap time of Last completed lap
+        node.current_rssi = unpack_16(node_data[5:])
+        return [node.last_lap_id, node.last_lap_time, node.current_rssi]
+
+    def get_lap_timesince_rssi(self, node_index):
+        '''Gets and updates the nodes lap count, time since last lap, and rssi.'''
+        node = self.nodes[node_index]
+        node_data = self.read_block(node.i2c_addr, READ_LAP_TIMESINCE_RSSI, 7)
+        node.last_lap_id = node_data[0] # Number of completed laps
+        node.time_since_lap = unpack_32(node_data[1:]) # Lap time of Last completed lap
+        node.current_rssi = unpack_16(node_data[5:])
+        return [node.last_lap_id, node.time_since_lap, node.current_rssi]
+
+    def get_frequency(self, node_index):
+        '''Gets and updates the nodes frequency.'''
+        node = self.nodes[node_index]
+        node_data = self.read_block(node.i2c_addr, READ_FREQUENCY, 2)
+        node.frequency = unpack_16(node_data[0:])
         return node.frequency
+
+    def get_trig_peak_rssi(self, node_index):
+        '''Gets and updates the nodes trigger and peak rssis.'''
+        node = self.nodes[node_index]
+        node_data = self.read_block(node.i2c_addr, READ_TRIG_PEAK_RSSI, 4)
+        node.trigger_rssi = unpack_16(node_data[0:])
+        node.peak_rssi = unpack_16(node_data[2:])
+        return [node.trigger_rssi, node.peak_rssi]
 
     #
     # I2C Set Functions
@@ -193,15 +214,17 @@ class Delta5Interface:
         '''Sets the given frequency to a node based on index number.'''
         success = False
         retry_count = 0
-
         node = self.nodes[node_index]
         while success is False and retry_count < I2C_RETRY_COUNT:
             self.write_block(node.i2c_addr, WRITE_FULL_RESET_FREQUENCY, pack_16(frequency))
-            if self.get_frequency_node(node) == frequency:
+            if self.get_frequency(node.index) == frequency:
                 success = True
+                self.log('Node {0}, frequency set {1}.'.format(node.index, frequency))
             else:
                 retry_count = retry_count + 1
-                self.log('Frequency Not Set ({0})'.format(retry_count))
+                self.log('Error, node {0}, frequency not set, retrying {1}' \
+                    .format(node.index, retry_count))
+        self.get_trig_peak_rssi(node.index) # Get updated values
         return node.frequency
 
     def set_race_status(self, race_status):
@@ -212,8 +235,9 @@ class Delta5Interface:
             while success is False and retry_count < I2C_RETRY_COUNT:
                 self.write_block(node.i2c_addr, WRITE_RACE_STATUS, [race_status])
                 # How to check that the race status has changed here?
-                self.log('Race status set ({0})'.format(race_status))
                 success = True
+                self.log('Node {0}, race status set {1}'.format(node.index, race_status))
+            self.get_trig_peak_rssi(node.index) # Get updated values
         return race_status
 
     #
