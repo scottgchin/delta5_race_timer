@@ -14,7 +14,7 @@
         get_version = undefined;
         get_timestamp = undefined;
         get_settings = undefined;
-        clear_laps = undefined;
+        reset = undefined;
 
         $(document).ready(function() {
             var buzzer = $('#buzzer')[0];
@@ -78,10 +78,16 @@
                 return false;
             }
 
-            clear_laps = function() {
+            reset = function() {
                 for (i=0; i<num_nodes; i++) {
                     $('#lap_table_' + i).empty();
+                    $('#peak_rssi_' + i).html(0);
+                    $('#peak_rssi_bar_' + i).css("width", normalize_rssi(0)+'%');
+                    $('#trigger_rssi_' + i).html(0);
+                    $('#trigger_rssi_bar_' + i).css("width", normalize_rssi(0)+'%');
                 }
+                socket.emit('enable_calibration_mode');
+                get_timestamp();
             };
 
             function set_frequency(index) {
@@ -105,6 +111,30 @@
                 }
             }
 
+            $('form#set_calibration_threshold').submit(function() {
+                var data = {
+                    calibration_threshold: parseInt($('#calibration_threshold_value').val())
+                }
+                socket.emit('set_calibration_threshold', data);
+                return false;
+            });
+
+            $('form#set_calibration_offset').submit(function() {
+                var data = {
+                    calibration_offset: parseInt($('#calibration_offset_value').val())
+                }
+                socket.emit('set_calibration_offset', data);
+                return false;
+            });
+
+            $('form#set_trigger_threshold').submit(function() {
+                var data = {
+                    trigger_threshold: parseInt($('#trigger_threshold_value').val())
+                }
+                socket.emit('set_trigger_threshold', data);
+                return false;
+            });
+
             socket.emit('get_settings', function(msg) {
                 const Node = ({frequency, current_rssi, trigger_rssi}, index) => `
                     <div class='col-md-2'>
@@ -124,11 +154,16 @@
                                     </div>
                                 </div>
                             </form>
-                            <form id="set_trigger_${index}" method="POST" action='#'>
-                                <div class="form-group">
-                                    Trigger: <span id='trigger_${index}'>${trigger_rssi}</span>
-                                </div>
-                            </form>
+                            <div class="progress">
+                              <div id="peak_rssi_bar_${index}" class="progress-bar progress-bar-info" role="progressbar" style="width: 0%">
+                                <span id='peak_rssi_${index}'>0</span>
+                              </div>
+                            </div>
+                            <div class="progress">
+                              <div id="trigger_rssi_bar_${index}" class="progress-bar progress-bar-danger" role="progressbar" style="width: 0%">
+                                <span id='trigger_rssi_${index}'>0</span>
+                              </div>
+                            </div>
                             <div class="progress">
                               <div id="current_rssi_bar_${index}" class="progress-bar progress-bar-success" role="progressbar" style="width: 70%">
                                 <span id='current_rssi_${index}'>${current_rssi}</span>
@@ -155,6 +190,10 @@
                     $('form#simulate_pass_' + i).submit(simulate_pass(i));
                 }
 
+                $('#calibration_threshold_value').val(msg.calibration_threshold);
+                $('#calibration_offset_value').val(msg.calibration_offset);
+                $('#trigger_threshold_value').val(msg.trigger_threshold);
+
                 append_to_log('get_settings returned ' + JSON.stringify(msg));
 
                 get_timestamp();
@@ -168,6 +207,21 @@
             socket.on('trigger_rssi_set', function(msg) {
                 $('#trigger_' + msg.node).html(msg.trigger_rssi);
                 append_to_log('on trigger_rssi_set ' + JSON.stringify(msg));
+            });
+
+            socket.on('calibration_threshold_set', function(msg) {
+                $('#calibration_threshold_value').val(msg.calibration_threshold);
+                append_to_log('on calibration_threshold_set ' + JSON.stringify(msg));
+            });
+
+            socket.on('calibration_offset_set', function(msg) {
+                $('#calibration_offset_value').val(msg.calibration_offset);
+                append_to_log('on calibration_offset_set ' + JSON.stringify(msg));
+            });
+
+            socket.on('trigger_threshold_set', function(msg) {
+                $('#trigger_threshold_value').val(msg.trigger_threshold);
+                append_to_log('on trigger_threshold_set ' + JSON.stringify(msg));
             });
 
             function ms_to_time(s) {
@@ -200,6 +254,11 @@
                 last_lap_timestamp[msg.node] = msg.timestamp;
                 lap_table.append(Lap(lap_table[0].children.length, ms_to_time(lap_time)));
                 append_to_log('on pass_record ' + JSON.stringify(msg));
+
+                $('#peak_rssi_' + msg.node).html(msg.peak_rssi);
+                $('#peak_rssi_bar_' + msg.node).css("width", normalize_rssi(msg.peak_rssi)+'%');
+                $('#trigger_rssi_' + msg.node).html(msg.trigger_rssi);
+                $('#trigger_rssi_bar_' + msg.node).css("width", normalize_rssi(msg.trigger_rssi)+'%');
             });
         });
     </script>
@@ -207,11 +266,55 @@
 <body>
     <div class="container-fluid">
         <div class="row">
-            <div class="col-xs-12">
-                <button class="btn" onclick="get_version()">Get Version</button>
-                <button class="btn" onclick="get_timestamp()">Get Timestamp</button>
-                <button class="btn" onclick="get_settings()">Get Settings</button>
-                <button class="btn btn-space btn-danger" onclick="clear_laps()">Clear Laps</button>
+            <div class="col-xs-6">
+                <div class='panel panel-default'>
+                    <div class="panel-heading">
+                        <h3 class="panel-title">Global Settings</h3>
+                    </div>
+                    <div class="panel-body">
+
+                        <form id="set_calibration_threshold" method="POST" action='#'>
+                            <div class="form-group">
+                                Calibration Threshold
+                                <div class="input-group input-group-sm">
+                                    <input class="form-control" type="text" name="calibration_threshold_value" id="calibration_threshold_value" value='0'>
+                                    <span class="input-group-btn">
+                                        <input class="btn btn-default" type="submit" value="Set">
+                                    </span>
+                                </div>
+                            </div>
+                        </form>
+
+                        <form id="set_calibration_offset" method="POST" action='#'>
+                            <div class="form-group">
+                                Calibration Offset
+                                <div class="input-group input-group-sm">
+                                    <input class="form-control" type="text" name="calibration_offset_value" id="calibration_offset_value" value='0'>
+                                    <span class="input-group-btn">
+                                        <input class="btn btn-default" type="submit" value="Set">
+                                    </span>
+                                </div>
+                            </div>
+                        </form>
+
+                        <form id="set_trigger_threshold" method="POST" action='#'>
+                            <div class="form-group">
+                                Trigger Threshold
+                                <div class="input-group input-group-sm">
+                                    <input class="form-control" type="text" name="trigger_threshold_value" id="trigger_threshold_value" value='0'>
+                                    <span class="input-group-btn">
+                                        <input class="btn btn-default" type="submit" value="Set">
+                                    </span>
+                                </div>
+                            </div>
+                        </form>
+
+                        <button class="btn" onclick="get_version()">Get Version</button>
+                        <button class="btn" onclick="get_timestamp()">Get Timestamp</button>
+                        <button class="btn" onclick="get_settings()">Get Settings</button>
+                        <button class="btn btn-space btn-danger" onclick="reset()">Reset</button>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="row" id="nodes"></div>

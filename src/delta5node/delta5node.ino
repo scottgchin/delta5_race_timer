@@ -1,5 +1,7 @@
 // Delta 5 Race Timer by Scott Chin
 // SPI driver based on fs_skyrf_58g-main.c Written by Simon Chambers
+// I2C functions by Mike Ochtman
+// Lap trigger function by Alex Huisman
 //
 // MIT License
 //
@@ -25,10 +27,6 @@
 
 #include <Wire.h>
 
-#define rxFault 0x80
-#define txFault 0x40
-#define txRequest 0x20
-
 // Node Setup -- Set the i2c address here
 // Node 1 = 8, Node 2 = 10, Node 3 = 12, Node 4 = 14
 // Node 5 = 16, Node 6 = 18, Node 7 = 20, Node 8 = 22
@@ -38,45 +36,65 @@ const int slaveSelectPin = 10; // Setup data pins for rx5808 comms
 const int spiDataPin = 11;
 const int spiClockPin = 13;
 
-const int buttonPin = 3; // Arduino D3 as a button to set rssiTriggerThreshold, ground button to press
-int buttonState = 0;
+#define READ_ADDRESS 0x00
+#define READ_FREQUENCY 0x03
+#define READ_LAP_STATS 0x05
+#define READ_CALIBRATION_THRESHOLD 0x15
+#define READ_CALIBRATION_MODE 0x16
+#define READ_CALIBRATION_OFFSET 0x17
+#define READ_TRIGGER_THRESHOLD 0x18
 
-// unsigned long rssiRisingTime = 0; // The time the rssi value is registered going above the threshold
-// unsigned long rssiFallingTime = 0; // The time the rssi value is registered going below the threshold
-bool crossing = false; // True when the quad is going through the gate
-int rssiTriggerBandwidth = 10; // Added and subtracted from rssiTrigger, tries to account for noise in rssi
-int rssiPeakHold = 0; // The peak rssi seen during a crossing event
-unsigned long rssiPeakHoldTime = 0; // The time of the peak rssi during a crossing event
-int rssiTriggerOffset = 20; // Subtracted from the peak rssi detected, accounts for variabilities crossing the gate
-int rssiTriggerMinCheck = 40; // Used to set a low trigger on initialization
+#define WRITE_FREQUENCY 0x51
+#define WRITE_CALIBRATION_THRESHOLD 0x65
+#define WRITE_CALIBRATION_MODE 0x66
+#define WRITE_CALIBRATION_OFFSET 0x67
+#define WRITE_TRIGGER_THRESHOLD 0x68
 
-// Rssi smoothing variables
-const int rssiSmoothingNumReadings = 50;
-int rssiSmoothing[rssiSmoothingNumReadings];
-int rssiSmoothingIndex = 0;
-long rssiSmoothingTotal = 0;
-
-// Use volatile for variables that will be used in interrupt service routines.
-// "Volatile" instructs the compiler to get a fresh copy of the data rather than try to
-// optimise temporary registers before using, as interrupts can change the value.
-
-// Define data package for i2c comms, variables that can be changed by i2c
 struct {
-	byte volatile command; // I2C code to identify messages
-	int volatile vtxFreq; // Frequency in mhz, 2 bytes
-	int volatile rssi; // Current rssi, 2 bytes
-	int volatile rssiTrigger; // Automatically set based on peak rssi value seen, 2 bytes
-	int volatile rssiPeak; // Set rssi trigger, 2 bytes
-	byte volatile lap; // Current lap number
-	unsigned long volatile completedLapTime; // Calculated time of the last completed lap, milliseconds, 4 bytes
-	unsigned long volatile lastLapTimeStamp; // Arduino clock time of the last completed lap, milliseconds, 4 bytes
-	byte volatile raceStatus; // True (1) when the race has been started from the raspberry pi, False (0)
-} commsTable;
+	uint16_t volatile vtxFreq = 5800;
+	// Subtracted from the peak rssi during a calibration pass to determine the trigger value
+	uint16_t volatile calibrationOffset = 5;
+	// Rssi must fall below trigger - settings.calibrationThreshold to end a calibration pass
+	uint16_t volatile calibrationThreshold = 60;
+	// Rssi must fall below trigger - settings.triggerThreshold to end a normal pass
+	uint16_t volatile triggerThreshold = 30;
+} settings;
 
-byte volatile ioBuffer[32]; // Data array for sending over i2c, up to 32 bytes per message
-int volatile ioBufferSize = 0;
-int volatile ioBufferIndex = 0;
-bool volatile dataReady = false; // Flag to trigger a Serial printout after an i2c event
+struct {
+	bool volatile calibrationMode = false;
+	// True when the quad is going through the gate
+	bool volatile crossing = false;
+	// Current unsmoothed rssi
+	uint16_t volatile rssiRaw = 0;
+	// Smoothed rssi value, needs to be a float for smoothing to work
+	float volatile rssiSmoothed = 0;
+	// int representation of the smoothed rssi value
+	uint16_t volatile rssi = 0;
+	// rssi value that will trigger a new pass
+	uint16_t volatile rssiTrigger;
+	// The peak raw rssi seen the current pass
+	uint16_t volatile rssiPeakRaw = 0;
+	// The peak smoothed rssi seen the current pass
+	uint16_t volatile rssiPeak = 0;
+	// The time of the peak raw rssi for the current pass
+	uint32_t volatile rssiPeakRawTimeStamp = 0;
+
+	// variables to track the loop time
+	uint32_t volatile loopTime = 0;
+	uint32_t volatile lastLoopTimeStamp = 0;
+} state;
+
+struct {
+	uint16_t volatile rssiPeakRaw;
+	uint16_t volatile rssiPeak;
+	uint32_t volatile timeStamp;
+	uint8_t volatile lap;
+} lastPass;
+
+uint8_t volatile ioCommand; // I2C code to identify messages
+uint8_t volatile ioBuffer[32]; // Data array for sending over i2c, up to 32 bytes per message
+int ioBufferSize = 0;
+int ioBufferIndex = 0;
 
 // Define vtx frequencies in mhz and their hex code for setting the rx5808 module
 int vtxFreqTable[] = {
@@ -94,20 +112,21 @@ uint16_t vtxHexTable[] = {
   0x281D, 0x288F, 0x2902, 0x2914, 0x2987, 0x2999, 0x2A0C, 0x2A1E  // Band C / Raceband
 };
 
+// Defines for fast ADC reads
+#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
 
 // Initialize program
 void setup() {
 	Serial.begin(115200); // Start serial for output/debugging
-
-	pinMode(buttonPin, INPUT); // Define digital button for setting rssi trigger
-	digitalWrite(buttonPin, HIGH);
 
 	pinMode (slaveSelectPin, OUTPUT); // RX5808 comms
 	pinMode (spiDataPin, OUTPUT);
 	pinMode (spiClockPin, OUTPUT);
 	digitalWrite(slaveSelectPin, HIGH);
 
-	while (!Serial) {}; // Wait for the Serial port to initialise
+	while (!Serial) {
+	}; // Wait for the Serial port to initialise
 	Serial.print("Ready: ");
 	Serial.println(i2cSlaveAddress);
 
@@ -115,22 +134,20 @@ void setup() {
 	Wire.onReceive(i2cReceive); // Trigger 'i2cReceive' function on incoming data
 	Wire.onRequest(i2cTransmit); // Trigger 'i2cTransmit' function for outgoing data, on master request
 
-	// Initialize commsTable defaults
-	commsTable.vtxFreq = 5800; // Frequency is set by pi when number of nodes is known
-	commsTable.rssi = 0;
-	commsTable.rssiTrigger = rssiRead() + rssiTriggerMinCheck; // Sets a low trigger value to ensure capturing the first gate crossing
-	commsTable.rssiPeak = 0;
-	commsTable.lap = 250; // Can't use -1 so set no laps registered to 250
-	commsTable.completedLapTime = 0;
-	commsTable.lastLapTimeStamp = 0;
-	commsTable.raceStatus = 0; // True when the race has been started from the raspberry pi
+	// set ADC prescaler to 16 to speedup ADC readings
+    sbi(ADCSRA,ADPS2);
+    cbi(ADCSRA,ADPS1);
+    cbi(ADCSRA,ADPS0);
 
-	setRxModule(commsTable.vtxFreq); // Setup rx module to default frequency
+	// Initialize lastPass defaults
+	state.rssi = 0;
+	state.rssiTrigger = 0;
+	lastPass.rssiPeakRaw = 0;
+	lastPass.rssiPeak = 0;
+	lastPass.lap = 0;
+	lastPass.timeStamp = 0;
 
-	// Initialize rssi smoothing array
-	for (int index = 0; index < rssiSmoothingNumReadings; index++) {
-		rssiSmoothing[index] = 0;
-	}
+	setRxModule(settings.vtxFreq); // Setup rx module to default frequency
 }
 
 // Functions for the rx5808 module
@@ -230,133 +247,73 @@ void setRxModule(int frequency) {
 	digitalWrite(spiDataPin, LOW);
 }
 
-// This function only exists for rssi thriggering from the arduino digital button
-void setRssiThreshold() {
-	Serial.println(" ");
-	Serial.println("Setting rssiTreshold.");
-
-	int thresholdAvg = rssiRead(); // Calculate rssiThreshold average
-	thresholdAvg += rssiRead();
-	thresholdAvg += rssiRead();
-	thresholdAvg = thresholdAvg/3; // Average of 3 rssi readings
-	commsTable.rssiTrigger = thresholdAvg;
-
-	Serial.print("rssiTrigger: ");
-	Serial.println(commsTable.rssiTrigger);
-}
+#define RSSI_READ_AVERAGE_COUNT 10
 
 // Read the RSSI value for the current channel
 int rssiRead() {
-	// This function with 50 analog reads takes around 5 ms
 	long rssiAvg = 0; // Calculate rssi average
-	for (uint8_t i = 0; i < 50; i++){
+	for (uint8_t i = 0; i < RSSI_READ_AVERAGE_COUNT; i++){
 		rssiAvg += analogRead(0); // Pin A0
 	}
-	rssiAvg = (int) (rssiAvg / 50); // Average of 50 rssi readings
+	rssiAvg = (int) (rssiAvg / RSSI_READ_AVERAGE_COUNT); // Average of 50 rssi readings
 	rssiAvg = constrain(rssiAvg, 1, 32000); // Positive 2 byte limit, not really needed
 	return rssiAvg;
 }
 
-// Only used for serial printing the lap times
-void lapCompleted() {
-	float h, m, s, ms;
-	unsigned long over;
-
-	m = int(commsTable.completedLapTime / 60000); // Convert millis() time to m, s, ms
-	over = commsTable.completedLapTime % 60000;
-	s = int(over / 1000);
-	over = over % 1000;
-	ms = int(over);
-
-	Serial.println(" ");
-	Serial.print("Lap: ");
-	Serial.print(commsTable.lap);
-	Serial.print(" Time: ");
-	Serial.print(m, 0);
-	Serial.print("m ");
-	Serial.print(s, 0);
-	Serial.print("s ");
-	Serial.print(ms, 0);
-	Serial.println("ms");
-}
-
 // Main loop
 void loop() {
-	//commsTable.raceStatus = 1; // Uncomment for individual node testing
 	//delay(250);
 
-	// Get the next reading
-	rssiSmoothing[rssiSmoothingIndex] = rssiRead();
-	// Advance the index and wrap if at the end
-	rssiSmoothingIndex += 1;
-	if (rssiSmoothingIndex >= rssiSmoothingNumReadings) { rssiSmoothingIndex = 0; }
-	// Calculate and save to comms table the running average
-	rssiSmoothingTotal = 0;
-	for (int index = 0; index < rssiSmoothingNumReadings; index++) {
-		rssiSmoothingTotal += rssiSmoothing[index];
-	}
-	commsTable.rssi = (int) (rssiSmoothingTotal / rssiSmoothingNumReadings);
+	// Calculate the time it takes to run the main loop
+	int lastLoopTimeStamp = state.lastLoopTimeStamp;
+	state.lastLoopTimeStamp = micros();
+	state.loopTime = state.lastLoopTimeStamp - lastLoopTimeStamp;
 
-	// Wait for raceStatus True
-	if (commsTable.raceStatus == 1) {
-		// Find the peak rssi and the time it occured during a crossing event
-		if (crossing == true && commsTable.rssi > rssiPeakHold) {
-			rssiPeakHold = commsTable.rssi;
-			rssiPeakHoldTime = millis();
-		}
-		// Rssi above threshold and quad not already crossing the gate, quad is entering to start gate
-		if ((commsTable.rssi > (commsTable.rssiTrigger + rssiTriggerBandwidth)) && (crossing == false)) {
-			// rssiRisingTime = millis(); // Sets the arduino clock time of the quad approaching the gate
-			// Serial.print("rssiRisingTime: ");
-			// Serial.println(rssiRisingTime);
-			crossing = true; // Quad is going through the gate
+	const float filterRatio =  0.01f;
+
+	state.rssiRaw = rssiRead();
+	state.rssiSmoothed = (filterRatio * (float)state.rssiRaw) + ((1.0f-filterRatio) * state.rssiSmoothed);
+	state.rssi = (int)state.rssiSmoothed;
+
+	if (state.rssiTrigger > 0) {
+		if (!state.crossing && state.rssi > state.rssiTrigger) {
+			state.crossing = true; // Quad is going through the gate
 			Serial.println("Crossing = True");
 		}
-		// Rssi below threshold and quad is crossing the gate, quad has now left the start gate
-		else if ((commsTable.rssi < (commsTable.rssiTrigger - rssiTriggerBandwidth)) && (crossing == true)) {
-			// rssiFallingTime = millis(); // Sets the arduino clock time of the quad leaving the gate
-			// Serial.print("rssiFallingTime: ");
-			// Serial.println(rssiFallingTime);
-			crossing = false; // Quad has left the gate
-			Serial.println("Crossing = False");
 
-			// Calculates the completed lap time
-			// commsTable.completedLapTime = rssiRisingTime + (rssiFallingTime - rssiRisingTime)/2 - commsTable.lastLapTimeStamp;
-			commsTable.completedLapTime = rssiPeakHoldTime - commsTable.lastLapTimeStamp;
-
-			commsTable.rssiPeak = rssiPeakHold; // Saves the peak rssi value to the comms table
-			rssiPeakHold = 0;
-
-			
-			if (commsTable.lap == 250) { // Race starting, this logs the first time through the gate
-				// Sets the arduino clock time through the gate
-				// commsTable.lastLapTimeStamp = rssiRisingTime + ((rssiFallingTime - rssiRisingTime)/2);
-				// commsTable.lastLapTimeStamp = rssiPeakHoldTime;
-				commsTable.rssiTrigger = commsTable.rssiPeak - rssiTriggerOffset; // Sets a new trigger for this race
-				Serial.println("Fly over start!");
-				commsTable.lap = 0;
-			}
-			else {
-				commsTable.lap = commsTable.lap + 1;
-			}
-
-			commsTable.lastLapTimeStamp = rssiPeakHoldTime;
-
-			
-			lapCompleted(); // Serial prints lap time
+		// Find the peak rssi and the time it occured during a crossing event
+		// Use the raw value to account for the delay in smoothing.
+		if (state.rssiRaw > state.rssiPeakRaw) {
+			state.rssiPeakRaw = state.rssiRaw;
+			state.rssiPeakRawTimeStamp = millis();
 		}
-	}
 
-	buttonState = digitalRead(buttonPin); // Detect button press to set rssi trigger
-	if (buttonState == LOW) {
-		Serial.println("Button pressed.");
-		setRssiThreshold();
-	}
+		if (state.crossing) {
+			int triggerThreshold = settings.triggerThreshold;
 
-	if (dataReady) { // Set True in i2cReceive, print current commsTable and ioBuffer
-		// printCommsTable();
-		// printIoBuffer();
-		dataReady = false;
+			// If in calibration mode, keep raising the trigger value
+			if (state.calibrationMode) {
+				state.rssiTrigger = max(state.rssiTrigger, state.rssi - settings.calibrationOffset);
+				// when calibrating, use a larger threshold
+				triggerThreshold = settings.calibrationThreshold;
+			}
+
+			state.rssiPeak = max(state.rssiPeak, state.rssi);
+
+			// See if we have left the gate
+			if (state.rssi < (state.rssiTrigger - triggerThreshold)) {
+				Serial.println("Crossing = False");
+				lastPass.rssiPeakRaw = state.rssiPeakRaw;
+				lastPass.rssiPeak = state.rssiPeak;
+				lastPass.timeStamp = state.rssiPeakRawTimeStamp;
+				lastPass.lap = lastPass.lap + 1;
+
+				state.crossing = false;
+				state.calibrationMode = false;
+				state.rssiPeakRaw = 0;
+				state.rssiPeak = 0;
+			}
+		}
 	}
 }
 
@@ -374,23 +331,23 @@ void i2cReceive(int byteCount) { // Number of bytes in rx buffer
 		Serial.println("Error: rx byte count and wire available don't agree");
 	}
 
-	commsTable.command = Wire.read(); // The first byte sent is a command byte
+	ioCommand = Wire.read(); // The first byte sent is a command byte
 
-	if (commsTable.command > 0x50) { // Commands > 0x50 are writes TO this slave
-		i2cHandleRx(commsTable.command);
+	if (ioCommand > 0x50) { // Commands > 0x50 are writes TO this slave
+		i2cHandleRx(ioCommand);
 	}
 	else { // Otherwise this is a request FROM this device
 		if (Wire.available()) { // There shouldn't be any data present on the line for a read request
-			Serial.println("Error: Wire.available() on a read request.");
+			Serial.print("Error: Wire.available() on a read request.");
+			Serial.println(ioCommand, HEX);
 			while(Wire.available()) {
 				Wire.read();
 			}
 		}
 	}
-	dataReady = true; // Flag to the main loop to print the commsTable
 }
 
-bool readAndValidateIoBuffer(int expectedSize) {
+bool readAndValidateIoBuffer(byte command, int expectedSize) {
 	uint8_t checksum = 0;
 	ioBufferSize = 0;
 	ioBufferIndex = 0;
@@ -407,21 +364,25 @@ bool readAndValidateIoBuffer(int expectedSize) {
 
 	while(Wire.available()) {
 		ioBuffer[ioBufferSize++] = Wire.read();
-		if (expectedSize < ioBufferSize) {
+		if (expectedSize + 1 < ioBufferSize) {
 			checksum += ioBuffer[ioBufferSize-1];
 		}
 	}
 
 	if (checksum != ioBuffer[ioBufferSize-1] ||
-		ioBufferSize-1 != expectedSize) {
+		ioBufferSize-2 != expectedSize) {
 		Serial.println("invalid checksum");
 		Serial.println(checksum);
 		Serial.println(ioBuffer[ioBufferSize-1]);
-		Serial.println(ioBufferSize-1);
+		Serial.println(ioBufferSize-2);
 		Serial.println(expectedSize);
 		return false;
 	}
 
+	if (command != ioBuffer[ioBufferSize-2]) {
+		Serial.println("command does not match");
+		return false;
+	}
 	return true;
 }
 
@@ -469,38 +430,45 @@ byte i2cHandleRx(byte command) { // The first byte sent by the I2C master is the
 	bool success = false;
 
 	switch (command) {
-		case 0x51: // Full reset, initialize arduinos, change frequency
-			if (readAndValidateIoBuffer(2)) { // Confirm expected number of bytes
-				commsTable.vtxFreq = ioBufferRead16();
-				setRxModule(commsTable.vtxFreq); // Shouldn't do this in Interrupt Service Routine
-				commsTable.rssiTrigger = (commsTable.rssi + rssiTriggerMinCheck);
-				commsTable.rssiPeak = 0;
-				commsTable.lap = 250;
-				commsTable.completedLapTime = 0;
-				commsTable.lastLapTimeStamp = 0;
-				commsTable.raceStatus = 0;
+		case WRITE_FREQUENCY:
+			if (readAndValidateIoBuffer(0x51, 2)) {
+				settings.vtxFreq = ioBufferRead16();
+				setRxModule(settings.vtxFreq); // Shouldn't do this in Interrupt Service Routine
 				success = true;
 			}
 			break;
-		case 0x52: // Set race status, reset for a new race or stop
-			if (readAndValidateIoBuffer(1)) { // Confirm expected number of bytes
-				commsTable.raceStatus = ioBufferRead8();
-				if (commsTable.raceStatus == 1) {
-					commsTable.rssiTrigger = (commsTable.rssi + rssiTriggerMinCheck);
-					commsTable.rssiPeak = 0;
-					commsTable.lap = 250;
-					commsTable.completedLapTime = 0;
-					commsTable.lastLapTimeStamp = 0; // Reset to zero to catch first gate fly through again
-				}
-				else {
-					commsTable.raceStatus = 0;
-				}
+		case WRITE_CALIBRATION_THRESHOLD:
+			if (readAndValidateIoBuffer(WRITE_CALIBRATION_THRESHOLD, 2)) {
+				settings.calibrationThreshold = ioBufferRead16();
+				success = true;
+			}
+			break;
+		case WRITE_CALIBRATION_MODE:
+			if (readAndValidateIoBuffer(WRITE_CALIBRATION_MODE, 1)) {
+				state.calibrationMode = ioBufferRead8();
+				state.rssiTrigger = state.rssi - settings.calibrationOffset;
+				lastPass.rssiPeakRaw = 0;
+				lastPass.rssiPeak = 0;
+				state.rssiPeakRaw = 0;
+				state.rssiPeakRawTimeStamp = 0;
+				success = true;
+			}
+			break;
+		case WRITE_CALIBRATION_OFFSET:
+			if (readAndValidateIoBuffer(WRITE_CALIBRATION_OFFSET, 2)) {
+				settings.calibrationOffset = ioBufferRead16();
+				success = true;
+			}
+			break;
+		case WRITE_TRIGGER_THRESHOLD:
+			if (readAndValidateIoBuffer(WRITE_TRIGGER_THRESHOLD, 2)) {
+				settings.triggerThreshold = ioBufferRead16();
 				success = true;
 			}
 			break;
 	}
 
-	commsTable.command = 0; // Clear previous command
+	ioCommand = 0; // Clear previous command
 
 	if (!success) { // Set control to rxFault if 0xFF result
 		 Serial.print("RX Fault command: ");
@@ -515,76 +483,43 @@ byte i2cHandleRx(byte command) { // The first byte sent by the I2C master is the
 void i2cTransmit() {
 	ioBufferSize = 0;
 
-	switch (commsTable.command) {
-		case 0x00: // Send i2cSlaveAddress
+	switch (ioCommand) {
+		case READ_ADDRESS:
 			ioBufferWrite8(i2cSlaveAddress);
 			break;
-		case 0x02: // Send lap number, calculated lap time in milliseconds, current rssi
-			ioBufferWrite8(commsTable.lap);
-			ioBufferWrite32(commsTable.completedLapTime);
-			ioBufferWrite16(commsTable.rssi);
+		case READ_FREQUENCY:
+			ioBufferWrite16(settings.vtxFreq);
 			break;
-		case 0x03: // Send frequency
-			ioBufferWrite16(commsTable.vtxFreq);
+		case READ_LAP_STATS:
+			ioBufferWrite8(lastPass.lap);
+			ioBufferWrite32(millis() - lastPass.timeStamp);
+			ioBufferWrite16(state.rssi);
+			ioBufferWrite16(state.rssiTrigger);
+			ioBufferWrite16(lastPass.rssiPeakRaw);
+			ioBufferWrite16(lastPass.rssiPeak);
+			ioBufferWrite32(state.loopTime);
 			break;
-		case 0x05: // Send lap number, time since last lap, current rssi
-			ioBufferWrite8(commsTable.lap);
-			ioBufferWrite32(millis() - commsTable.lastLapTimeStamp);
-			ioBufferWrite16(commsTable.rssi);
+		case READ_CALIBRATION_THRESHOLD:
+			ioBufferWrite16(settings.calibrationThreshold);
 			break;
-		case 0x07: // Send rssi trigger, rssi peak
-			ioBufferWrite16(commsTable.rssiTrigger);
-			ioBufferWrite16(commsTable.rssiPeak);
+		case READ_CALIBRATION_MODE:
+			ioBufferWrite8(state.calibrationMode);
+			break;
+		case READ_CALIBRATION_OFFSET:
+			ioBufferWrite16(settings.calibrationOffset);
+			break;
+		case READ_TRIGGER_THRESHOLD:
+			ioBufferWrite16(settings.triggerThreshold);
 			break;
 		default: // If an invalid command is sent, write nothing back, master must react
 			Serial.print("TX Fault command: ");
-			Serial.println(commsTable.command, HEX);
+			Serial.println(ioCommand, HEX);
 	}
 
-	commsTable.command = 0; // Clear previous command
+	ioCommand = 0; // Clear previous command
 
 	if (ioBufferSize > 0) { // If there is pending data, send it
 		ioBufferWriteChecksum();
 		Wire.write((byte *)&ioBuffer, ioBufferSize);
 	}
-}
-
-// Prints to commsTable to arduino serial console
-// Are all these builder lines needed?
-void printCommsTable() {
-	String builder = "";
-	builder = "commsTable contents:";
-	Serial.println(builder);
-	builder = "  Command: ";
-	builder += String(commsTable.command, HEX);
-	Serial.println(builder);
-	builder = "  VTX Freq: ";
-	builder += commsTable.vtxFreq;
-	Serial.println(builder);
-	builder = "  RSSI: ";
-	builder += commsTable.rssi;
-	Serial.println(builder);
-	builder = "  RSSI Triger: ";
-	builder += commsTable.rssiTrigger;
-	Serial.println(builder);
-	builder = "  Lap: ";
-	builder += commsTable.lap;
-	Serial.println(builder);
-	builder = "  Completed Lap Time: ";
-	builder += commsTable.completedLapTime;
-	Serial.println(builder);
-	builder = "  Race Status: ";
-	builder += commsTable.raceStatus;
-	Serial.println(builder);
-	Serial.println();
-}
-
-// Prints the transmit buffer to arduino serial console
-void printIoBuffer() {
-	Serial.println("Transmit Table:");
-	for (byte i = 0; i < 32; i++) {
-		Serial.print(" ");
-		Serial.print(ioBuffer[i]);
-	}
-	Serial.println(); // ends print line
 }

@@ -11,10 +11,11 @@ from datetime import timedelta
 
 import sys
 
+sys.path.append('../delta5interface')
 if sys.platform.lower().startswith('win'):
     from MockInterface import get_hardware_interface
 elif sys.platform.lower().startswith('linux'):
-    from TimingServerDelta5Interface import get_hardware_interface
+    from Delta5Interface import get_hardware_interface
 
 hardwareInterface = get_hardware_interface()
 
@@ -72,14 +73,40 @@ def on_get_timestamp():
 
 @socketio.on('get_settings')
 def on_get_settings():
-    return {'nodes': hardwareInterface.get_settings_json()}
+    return hardwareInterface.get_settings_json()
 
 @socketio.on('set_frequency')
 def on_set_frequency(data):
     print(data)
     index = data['node']
     frequency = data['frequency']
-    emit('frequency_set', {'node': index, 'frequency': hardwareInterface.set_full_reset_frequency(index, frequency)}, broadcast=True) # Added
+    hardwareInterface.set_frequency(index, frequency)
+    emit('frequency_set', hardwareInterface.get_frequency_json(index), broadcast=True)
+
+@socketio.on('set_calibration_threshold')
+def on_set_calibration_threshold(data):
+    print(data)
+    calibration_threshold = data['calibration_threshold']
+    hardwareInterface.set_calibration_threshold_global(calibration_threshold)
+    emit('calibration_threshold_set', hardwareInterface.get_calibration_threshold_json(), broadcast=True)
+
+@socketio.on('set_calibration_offset')
+def on_set_calibration_offset(data):
+    print(data)
+    calibration_offset = data['calibration_offset']
+    hardwareInterface.set_calibration_offset_global(calibration_offset)
+    emit('calibration_offset_set', hardwareInterface.get_calibration_offset_json(), broadcast=True)
+
+@socketio.on('set_trigger_threshold')
+def on_set_trigger_threshold(data):
+    print(data)
+    trigger_threshold = data['trigger_threshold']
+    hardwareInterface.set_trigger_threshold_global(trigger_threshold)
+    emit('trigger_threshold_set', hardwareInterface.get_trigger_threshold_json(), broadcast=True)
+
+@socketio.on('enable_calibration_mode')
+def on_enable_calibration_mode():
+    hardwareInterface.enable_calibration_mode();
 
 @socketio.on('simulate_pass')
 def on_simulate_pass(data):
@@ -88,8 +115,15 @@ def on_simulate_pass(data):
     emit('pass_record', {'node': index, 'frequency': hardwareInterface.nodes[index].frequency, 'timestamp': milliseconds()}, broadcast=True)
 
 def pass_record_callback(node, ms_since_lap):
-    print('Pass record from {0}{1}: {2}'.format(node.index, node.frequency, ms_since_lap))
-    socketio.emit('pass_record', {'node': node.index, 'frequency': node.frequency, 'timestamp': milliseconds() - ms_since_lap})
+    print('Pass record from {0}{1}: {2}, {3}'.format(node.index, node.frequency, ms_since_lap, milliseconds() - ms_since_lap))
+    #TODO: clean this up
+    socketio.emit('pass_record', {
+        'node': node.index,
+        'frequency': node.frequency,
+        'timestamp': milliseconds() - ms_since_lap,
+        'trigger_rssi': node.trigger_rssi,
+        'peak_rssi_raw': node.peak_rssi_raw,
+        'peak_rssi': node.peak_rssi})
 
 hardwareInterface.pass_record_callback = pass_record_callback
 

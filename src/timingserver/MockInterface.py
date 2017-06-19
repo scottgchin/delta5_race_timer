@@ -5,16 +5,19 @@ import sys
 
 sys.path.append('../delta5interface')
 from Node import Node
+from BaseHardwareInterface import BaseHardwareInterface
 
-class MockInterface:
+class MockInterface(BaseHardwareInterface):
     def __init__(self):
         self.update_thread = None
         self.nodes = []
+        self.calibration_threshold = 20
 
         frequencies = [5685, 5760, 5800, 5860, 5905, 5645]
-        for frequency in frequencies:
+        for index, frequency in enumerate(frequencies):
             node = Node()
             node.frequency = frequency
+            node.index = index
             self.nodes.append(node)
 
     def update_loop(self):
@@ -32,24 +35,23 @@ class MockInterface:
             self.log('starting background thread')
             self.update_thread = gevent.spawn(self.update_loop)
 
-    def set_full_reset_frequency(self, node_index, frequency):
+    def set_frequency(self, node_index, frequency):
         node = self.nodes[node_index]
         node.frequency = frequency
-        return node.frequency
+
+    def set_calibration_threshold(self, node_index, threshold):
+        node = self.nodes[node_index]
+        node.calibration_threshold = threshold
+
+    def set_calibration_threshold_global(self, calibration_threshold):
+        self.calibration_threshold = calibration_threshold
+
+    def enable_calibration_mode(self):
+        pass
 
     def log(self, message):
         string = 'MockInterface: {0}'.format(message)
         print(string)
-
-    def get_node_settings_json(self, node):
-        return {'frequency': node.frequency, 'current_rssi': node.current_rssi, 'trigger_rssi': node.trigger_rssi}
-
-    def get_settings_json(self):
-        settings = [self.get_node_settings_json(node) for node in self.nodes]
-        return settings
-
-    def get_heartbeat_json(self):
-        return { 'current_rssi': [node.current_rssi for node in self.nodes]}
 
 
 def get_hardware_interface():
