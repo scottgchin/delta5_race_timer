@@ -1,0 +1,196 @@
+{% extends "layout.html" %} {% block title %}Settings{% endblock %} {% block head %}
+<script type="text/javascript" charset="utf-8">
+	$(document).ready(function () {
+		var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
+
+		function append_to_log(text) {
+			$('#log').prepend('<br>' + $('<div/>').text(text).html());
+		}
+
+		socket.on('hardware_log', function (msg) {
+			append_to_log(msg);
+		});
+
+		socket.on('current_rssi', function (msg) {
+			for (i = 0; i < msg.current_rssi.length; i++) {
+				$('.current_rssi_' + i).html(msg.current_rssi[i]);
+			}
+		});
+
+		socket.on('trigger_rssi', function (msg) {
+			for (i = 0; i < msg.trigger_rssi.length; i++) {
+				$('.trigger_rssi_' + i).html(msg.trigger_rssi[i]);
+			}
+		});
+
+		socket.on('peak_rssi', function (msg) {
+			for (i = 0; i < msg.peak_rssi.length; i++) {
+				$('.peak_rssi_' + i).html(msg.peak_rssi[i]);
+			}
+		});
+
+		socket.on('channel', function (msg) {
+			for (i = 0; i < msg.channel.length; i++) {
+				$('.channel_' + i).html(msg.channel[i] + ' ' + msg.frequency[i]);
+			}
+		});
+
+		$('.set_frequency li a').click(function (event) {
+			var data = {
+				node: parseInt($(this).data('node')),
+				frequency: parseInt($(this).data('frequency'))
+			};
+			socket.emit('set_frequency', data);
+		})
+
+		$('.set_pilot_position li a').click(function (event) {
+			var data = {
+				heat: parseInt($(this).data('heat')),
+				node: parseInt($(this).data('node')),
+				pilot: parseInt($(this).data('pilot'))
+			};
+			socket.emit('set_pilot_position', data);
+		})
+	});
+
+</script>
+{% endblock %} {% block content %}
+
+<!--Display node data-->
+<h4>Node Data</h4>
+
+<div class="container">
+	{% for node in range(num_nodes) %}
+	<div class='col-xs-6 col-md-3'>
+		<div class='panel panel-default'>
+			<div class="panel-heading">
+				<h4 class="panel-title">{{ node + 1 }}</h4>
+			</div>
+			<table class="table">
+				<tr>
+					<td>Frequency</td>
+					<td>
+						<div class="btn-group">
+							<button class="btn btn-default dropdown-toggle channel_{{ node }}" type="button" data-toggle="dropdown" aria-haspopup="true"
+							 aria-expanded="true"></button>
+							<ul class="dropdown-menu set_frequency">
+								{% for frequency in frequencies.query.all() %}
+								<li><a role="button" data-node="{{ node }}" data-frequency="{{ frequency.frequency }}">{{ frequency.channel }} {{ frequency.frequency }}</a></li>
+								{% endfor %}
+							</ul>
+						</div>
+					</td>
+				</tr>
+				<tr>
+					<td>RSSI</td>
+					<td>
+						<div class="current_rssi_{{ node }}"></div>
+					</td>
+				</tr>
+				<tr>
+					<td>Trigger</td>
+					<td>
+						<div class="trigger_rssi_{{ node }}"></div>
+					</td>
+				</tr>
+				<tr>
+					<td>Peak</td>
+					<td>
+						<div class="peak_rssi_{{ node }}"></div>
+					</td>
+				</tr>
+			</table>
+		</div>
+	</div>
+	{% endfor %}
+</div>
+
+<!--Heats list for editing-->
+<h4>Heats</h4>
+
+<div class="container">
+	{% for heat in heats.query.with_entities(heats.heat_id).distinct() %}
+	<div class='col-xs-6 col-md-3'>
+		<div class='panel panel-default'>
+			<div class="panel-heading">
+				<h4 class="panel-title">{{ heat.heat_id }}</h4>
+			</div>
+			<table class="table">
+				{% for node in range(num_nodes) %}
+				<tr>
+					<td>
+						<div class="channel_{{ node }}"></div>
+					</td>
+					<td>
+						<div class="btn-group">
+							<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+								{{ pilots.query.filter_by(pilot_id=
+									heats.query.filter_by(heat_id=heat.heat_id,node_index=node).first().pilot_id
+									).first().callsign }}
+								</button>
+							<ul class="dropdown-menu set_pilot_position">
+								{% for pilot in pilots.query.all() %}
+								<li><a role="button" data-heat="{{ heat.heat_id }}" data-node="{{ node }}" data-pilot="{{ pilot.pilot_id }}">{{ pilot.callsign }}</a></li>
+								{% endfor %}
+							</ul>
+						</div>
+					</td>
+				</tr>
+				{% endfor %}
+			</table>
+		</div>
+	</div>
+	{% endfor %}
+</div>
+
+<!--Pilots list for editing-->
+<h4>Pilots</h4>
+
+<div class="container">
+	<div class='col-xs-12 col-md-6'>
+		<div class='panel panel-default'>
+			<table class="table">
+				<thead>
+					<tr>
+						<th>Pilot ID</th>
+						<th>Call Sign</th>
+						<th>Name</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for pilot in pilots.query.all() %}
+					<!--If pilot.id not equal 0 to skip the blank name position-->
+					<tr>
+						<td>{{ pilot.pilot_id }}</td>
+						<td>{{ pilot.callsign }}</td>
+						<td>{{ pilot.name }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+<!--Clear saved rounds, reset heats, reset pilots-->
+<h4>Database Commands</h4>
+
+<div>
+	<button type="button" class="btn btn-default" id="clear_rounds" onclick="this.blur();">Clear Rounds</button>
+	<button type="button" class="btn btn-default" id="reset_heats" onclick="this.blur();">Reset Heats</button>
+	<button type="button" class="btn btn-default" id="reset_pilots" onclick="this.blur();">Reset Pilots</button>
+</div>
+
+<!--Reset the database-->
+<h4>Reset Database (Warning, destroys all data)</h4>
+
+<div>
+	<button type="button" class="btn btn-default" id="reset_database" onclick="this.blur();">Reset Database</button>
+</div>
+
+<!--Status messages from the timing system-->
+<h4>Hardware Log</h4>
+
+<div id="log"></div>
+
+{% endblock %}

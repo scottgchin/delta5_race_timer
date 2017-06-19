@@ -120,7 +120,7 @@ void setup() {
 	commsTable.rssi = 0;
 	commsTable.rssiTrigger = rssiRead() + rssiTriggerMinCheck; // Sets a low trigger value to ensure capturing the first gate crossing
 	commsTable.rssiPeak = 0;
-	commsTable.lap = 0;
+	commsTable.lap = 250; // Can't use -1 so set no laps registered to 250
 	commsTable.completedLapTime = 0;
 	commsTable.lastLapTimeStamp = 0;
 	commsTable.raceStatus = 0; // True when the race has been started from the raspberry pi
@@ -327,21 +327,23 @@ void loop() {
 			commsTable.rssiPeak = rssiPeakHold; // Saves the peak rssi value to the comms table
 			rssiPeakHold = 0;
 
-			// Race starting, this logs the first time through the gate
-			if (commsTable.lastLapTimeStamp == 0) {
+			
+			if (commsTable.lap == 250) { // Race starting, this logs the first time through the gate
 				// Sets the arduino clock time through the gate
 				// commsTable.lastLapTimeStamp = rssiRisingTime + ((rssiFallingTime - rssiRisingTime)/2);
-				commsTable.lastLapTimeStamp = rssiPeakHoldTime;
-				commsTable.rssiTrigger = commsTable.rssiPeak - rssiTriggerOffset; // Sets a new trigger
+				// commsTable.lastLapTimeStamp = rssiPeakHoldTime;
+				commsTable.rssiTrigger = commsTable.rssiPeak - rssiTriggerOffset; // Sets a new trigger for this race
 				Serial.println("Fly over start!");
+				commsTable.lap = 0;
 			}
-			else { // Race is running, this is a lap completed
-				// Records the arduino clock time through the gate
-				// commsTable.lastLapTimeStamp = rssiRisingTime + ((rssiFallingTime - rssiRisingTime)/2);
-				commsTable.lastLapTimeStamp = rssiPeakHoldTime;
+			else {
 				commsTable.lap = commsTable.lap + 1;
-				lapCompleted(); // Serial prints lap time
 			}
+
+			commsTable.lastLapTimeStamp = rssiPeakHoldTime;
+
+			
+			lapCompleted(); // Serial prints lap time
 		}
 	}
 
@@ -473,7 +475,7 @@ byte i2cHandleRx(byte command) { // The first byte sent by the I2C master is the
 				setRxModule(commsTable.vtxFreq); // Shouldn't do this in Interrupt Service Routine
 				commsTable.rssiTrigger = (commsTable.rssi + rssiTriggerMinCheck);
 				commsTable.rssiPeak = 0;
-				commsTable.lap = 0;
+				commsTable.lap = 250;
 				commsTable.completedLapTime = 0;
 				commsTable.lastLapTimeStamp = 0;
 				commsTable.raceStatus = 0;
@@ -486,7 +488,7 @@ byte i2cHandleRx(byte command) { // The first byte sent by the I2C master is the
 				if (commsTable.raceStatus == 1) {
 					commsTable.rssiTrigger = (commsTable.rssi + rssiTriggerMinCheck);
 					commsTable.rssiPeak = 0;
-					commsTable.lap = 0;
+					commsTable.lap = 250;
 					commsTable.completedLapTime = 0;
 					commsTable.lastLapTimeStamp = 0; // Reset to zero to catch first gate fly through again
 				}

@@ -1,0 +1,133 @@
+{% extends "layout.html" %} {% block title %}Settings{% endblock %} {% block head %}
+<script type="text/javascript" charset="utf-8">
+	$(document).ready(function () {
+		var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
+
+		socket.on('race_status_set', function (msg) {
+			$('#race_status').html(msg.race_status);
+		});
+
+		socket.on('current_laps', function (msg) {
+			$.each(msg.node_index, function (i, node_index) { // i is loop num, node_index is json array
+				$('#current_laps_' + i + ' tbody > tr').remove();
+				$.each(node_index.lap_id, function (j, lap_id) { // j is loop num, lap_id is not used
+					var $tr = $('<tr>').append(
+						$('<td>').text(node_index.lap_id[j]),
+						$('<td>').text(node_index.lap_time[j]),
+					).appendTo('#current_laps_' + i);
+				});
+			});
+		});
+
+		$('button#start_race').click(function (event) {
+			$('button#start_race').attr('disabled', 'disabled');
+			$('button#start_race_2min').attr('disabled', 'disabled');
+			$('button#stop_race').removeAttr('disabled');
+			$('button#save_laps').attr('disabled', 'disabled');
+			$('button#clear_laps').attr('disabled', 'disabled');
+			socket.emit('start_race');
+			return false;
+		});
+
+		$('button#start_race_2min').click(function (event) {
+			$('button#start_race').attr('disabled', 'disabled');
+			$('button#start_race_2min').attr('disabled', 'disabled');
+			$('button#stop_race').removeAttr('disabled');
+			$('button#save_laps').attr('disabled', 'disabled');
+			$('button#clear_laps').attr('disabled', 'disabled');
+			socket.emit('start_race_2min');
+			return false;
+		});
+
+		$('button#stop_race').click(function (event) {
+			$('button#start_race').removeAttr('disabled');
+			$('button#start_race_2min').removeAttr('disabled');
+			$("button#stop_race").attr('disabled', 'disabled');
+			$('button#save_laps').removeAttr('disabled');
+			$('button#clear_laps').removeAttr('disabled');
+			socket.emit('stop_race');
+			return false;
+		});
+
+		$('button#save_laps').click(function (event) {
+			socket.emit('save_laps');
+			return false;
+		});
+
+		$('button#clear_laps').click(function (event) {
+			socket.emit('clear_laps');
+			return false;
+		});
+
+		$('.set_current_heat li a').click(function (event) {
+			var data = {
+				heat: parseInt($(this).data('heat')),
+			};
+			socket.emit('set_current_heat', data);
+		})
+	});
+
+</script>
+{% endblock %} {% block content %}
+
+<!--Button for controlling the race-->
+<div>
+	<button type="button" class="btn btn-default" id="start_race" onclick="this.blur();">Start Race</button>
+	<button type="button" class="btn btn-default" id="start_race_2min" onclick="this.blur();">Start Race 2min</button>
+	<button type="button" class="btn btn-default" id="stop_race" disabled="disabled" onclick="this.blur();">Stop Race</button>
+	<button type="button" class="btn btn-default" id="save_laps" onclick="this.blur();">Save Laps</button>
+	<button type="button" class="btn btn-default" id="clear_laps" onclick="this.blur();">Clear Laps</button>
+	<div class="btn-group">
+		<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+		 Heat {{ current_heat }}
+		 </button>
+		<ul class="dropdown-menu set_current_heat">
+			{% for heat in heats.query.with_entities(heats.heat_id).distinct() %}
+			<li><a role="button" data-heat="heat"="{{ heat.heat_id }}">Heat {{ heat.heat_id }}</a></li>
+			{% endfor %}
+		</ul>
+	</div>
+</div>
+
+<!--Display the timing clock-->
+<div id="timer">
+	<script type="text/javascript">
+		$(document).ready(function () { $('#timer').load('buildTimer.php') });
+	</script>
+</div>
+
+<!--Display the race leaderboard-->
+<h6>Leaderboard</h6>
+<div id="leaderboard">
+	<script type="text/javascript">
+		$(document).ready(function () { setInterval(function () { $('#leaderboard').load('buildLeaderboard.php') }, 2000); });
+	</script>
+</div>
+
+
+<!--Display the current laps-->
+<h4>Laps</h4>
+
+<div class="container">
+	{% for node in range(num_nodes) %}
+	<div class="col-xs-6 col-md-2">
+		<div class='panel panel-default'>
+			<div class="panel-heading">
+				<h4 class="panel-title">{{ node + 1 }}</h4>
+			</div>
+				<table class="table" id="current_laps_{{ node }}">
+					<thead>
+						<tr>
+							<th>Lap</th>
+							<th>Lap Time</th>
+						</tr>
+					</thead>
+					<tbody>
+					</tbody>
+				</table>
+		</div>
+	</div>
+	{% endfor %}
+</div>
+
+{% endblock %}
