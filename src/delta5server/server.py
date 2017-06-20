@@ -258,54 +258,48 @@ def time_format(millis):
 
 def pass_record_callback(node, ms_since_lap):
     '''Logs and emits a completed lap.'''
+    server_log('Raw pass record: Node: {0}, MS Since Lap: {1}'.format(node.index, ms_since_lap))
+    emit_node_data()
 
-    print 'Pass record from {0} {1}: {2}, {3}'.format(node.index, node.frequency, ms_since_lap, \
-        ms_from_program_start() - ms_since_lap)
-    SOCKET_IO.emit('pass_record', {
-        'node': node.index,
-        'frequency': node.frequency,
-        'timestamp': ms_from_program_start() - ms_since_lap,
-        'trigger_rssi': node.trigger_rssi,
-        'peak_rssi_raw': node.peak_rssi_raw,
-        'peak_rssi': node.peak_rssi})
+    if RACE.race_status:
+        # Get the current pilot id on the node
+        # print 'node_index {0}'.format(node_index)
+        pilot_id = Heat.query.filter_by( \
+            heat_id=RACE.current_heat, node_index=node.index).first().pilot_id
+        # print 'pilot_id {0}'.format(pilot_id)
 
+        # Calculate the lap time stamp, milliseconds since start of race
+        lap_time_stamp = ms_from_race_start() - ms_since_lap
+        # print 'lap_time_stamp {0}'.format(lap_time_stamp)
 
-    # # Get the current pilot id on the node
-    # print 'node_index {0}'.format(node_index)
-    # pilot_id = Heat.query.filter_by( \
-    #     heat_id=RACE.current_heat, node_index=node_index).first().pilot_id
-    # print 'pilot_id {0}'.format(pilot_id)
+        # Get the last completed lap from the database
+        last_lap_id = DB.session.query(DB.func.max(CurrentLap.lap_id)) \
+            .filter_by(node_index=node.index).scalar()
+        print 'last_lap_id {0}'.format(last_lap_id)
 
-    # # Calculate the lap time stamp, total time since start of race
-    # lap_time_stamp = ms_from_race_start() - ms_since_lap
-    # print 'lap_time_stamp {0}'.format(lap_time_stamp)
+        # Instead of lap_id query the database for an existing lap zero
+        if last_lap_id is None: # If no laps this is the first pass
+            # Lap zero represents the time from the launch pad to flying through the gate
+            lap_time = lap_time_stamp
+            lap_id = 0
+        else: # Else this is a normal completed lap
+            # Find the time stamp of the last lap completed
+            last_lap_time_stamp = CurrentLap.query.filter_by( \
+                node_index=node.index, lap_id=last_lap_id).first().lap_time_stamp
+            print 'last_lap_time_stamp {0}'.format(last_lap_time_stamp)
+            # New lap time is the difference between the current time stamp and the last
+            lap_time = lap_time_stamp - last_lap_time_stamp
+            lap_id = last_lap_id + 1
+        print 'lap_time {0}'.format(lap_time)
 
-    # # Instead of lap_id query the database for an existing lap zero
-    # if lap_id == 0: # If lap is zero this is the first fly through the gate
-    #     # Lap zero represents the time from the launch pad to flying through the gate
-    #     lap_time = lap_time_stamp
-    # else: # Else this is a normal completed lap
-    #     # Find the last lap number completed
-    #     last_lap_id = DB.session.query(DB.func.max(CurrentLap.lap_id)).filter_by( \
-    #         node_index=node_index).scalar()
-    #     print 'last_lap_id {0}'.format(last_lap_id)
-    #     # Find the time stamp of the last lap completed
-    #     last_lap_time_stamp = CurrentLap.query.filter_by( \
-    #         node_index=node_index, lap_id=last_lap_id).first().lap_time_stamp
-    #     print 'last_lap_time_stamp {0}'.format(last_lap_time_stamp)
-    #     # New lap time is the difference between the current time stamp and the last lap timestamp
-    #     lap_time = lap_time_stamp - last_lap_time_stamp
-    # print 'lap_time {0}'.format(lap_time)
+        # Add the new lap to the database
+        DB.session.add(CurrentLap(node_index=node.index, pilot_id=pilot_id, lap_id=lap_id, \
+            lap_time_stamp=lap_time_stamp, lap_time=lap_time))
+        DB.session.commit()
 
-    # # Add the new lap to the database
-    # DB.session.add(CurrentLap(node_index=node_index, pilot_id=pilot_id, lap_id=lap_id, \
-    #     lap_time_stamp=lap_time_stamp, lap_time=lap_time))
-    # DB.session.commit()
-
-    # server_log('Pass record: Node: {0}, Lap: {1}, Lap time: {2}'.format(node_index, lap_id, time_format(lap_time)))
-    # emit_current_laps()
-    # emit_trigger_rssi()
-    # emit_peak_rssi()
+        server_log('Pass record: Node: {0}, Lap: {1}, Lap time: {2}' \
+            .format(node.index, lap_id, time_format(lap_time)))
+        emit_current_laps()
 
 INTERFACE.pass_record_callback = pass_record_callback
 
@@ -342,18 +336,19 @@ print 'Number of nodes found: {0}'.format(RACE.num_nodes)
 
 gevent.sleep(0.500) # Delay to get I2C addresses
 default_frequencies()
+INTERFACE.set_calibration_threshold_global(80)
 
 DB.session.query(CurrentLap).delete() # Clear out the current laps table
 DB.session.commit()
 
 
 # Test data
-DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=0, lap_time_stamp=5000, lap_time=5000))
-DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=1, lap_time_stamp=15000, lap_time=10000))
-DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=2, lap_time_stamp=30000, lap_time=15000))
-DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=0, lap_time_stamp=6000, lap_time=6000))
-DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=1, lap_time_stamp=15000, lap_time=9000))
-DB.session.commit()
+# DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=0, lap_time_stamp=5000, lap_time=5000))
+# DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=1, lap_time_stamp=15000, lap_time=10000))
+# DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=2, lap_time_stamp=30000, lap_time=15000))
+# DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=0, lap_time_stamp=6000, lap_time=6000))
+# DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=1, lap_time_stamp=15000, lap_time=9000))
+# DB.session.commit()
 
 if __name__ == '__main__':
     SOCKET_IO.run(APP, host='0.0.0.0', debug=True)
