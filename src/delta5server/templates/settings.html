@@ -11,27 +11,18 @@
 			append_to_log(msg);
 		});
 
-		socket.on('current_rssi', function (msg) {
+		socket.on('heartbeat', function (msg) {
 			for (i = 0; i < msg.current_rssi.length; i++) {
 				$('.current_rssi_' + i).html(msg.current_rssi[i]);
 			}
 		});
 
-		socket.on('trigger_rssi', function (msg) {
-			for (i = 0; i < msg.trigger_rssi.length; i++) {
-				$('.trigger_rssi_' + i).html(msg.trigger_rssi[i]);
-			}
-		});
-
-		socket.on('peak_rssi', function (msg) {
-			for (i = 0; i < msg.peak_rssi.length; i++) {
-				$('.peak_rssi_' + i).html(msg.peak_rssi[i]);
-			}
-		});
-
-		socket.on('channel', function (msg) {
-			for (i = 0; i < msg.channel.length; i++) {
+		socket.on('node_data', function (msg) {
+			for (i = 0; i < msg.frequency.length; i++) {
+				// $('.frequency_' + i).html(msg.trigger_rssi[i]); // Not used
 				$('.channel_' + i).html(msg.channel[i] + ' ' + msg.frequency[i]);
+				$('.trigger_rssi_' + i).html(msg.trigger_rssi[i]);
+				$('.peak_rssi_' + i).html(msg.peak_rssi[i]);
 			}
 		});
 
@@ -142,6 +133,10 @@
 	</div>
 	{% endfor %}
 </div>
+<div>
+	<button type="button" class="btn btn-default" id="add_heat" onclick="this.blur();">Add Heat</button>
+</div>
+
 
 <!--Pilots list for editing-->
 <h4>Pilots</h4>

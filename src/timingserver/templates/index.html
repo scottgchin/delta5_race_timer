@@ -243,16 +243,17 @@
             socket.on('pass_record', function(msg) {
                 buzzer.play();
                 var lap_table = $('#lap_table_' + msg.node);
-                const Lap = (index, time) => `
+                const Lap = (index, rssi, time) => `
                     <tr>
-                      <td>${index}</td>
-                      <td><p class="text-right">${time}</p></td>
+                        <td>${index}</td>
+                        <td>${rssi}</td>
+                        <td><p class="text-right">${time}</p></td>
                     </tr>
                 `;
 
                 var lap_time = msg.timestamp - last_lap_timestamp[msg.node];
                 last_lap_timestamp[msg.node] = msg.timestamp;
-                lap_table.append(Lap(lap_table[0].children.length, ms_to_time(lap_time)));
+                lap_table.append(Lap(lap_table[0].children.length, msg.peak_rssi, ms_to_time(lap_time)));
                 append_to_log('on pass_record ' + JSON.stringify(msg));
 
                 $('#peak_rssi_' + msg.node).html(msg.peak_rssi);
