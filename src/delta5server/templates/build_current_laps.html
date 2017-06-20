@@ -1,0 +1,22 @@
+
+<div class="container">
+	{% for node in range(num_nodes) %}
+	<div class="col-xs-6 col-md-2">
+		<div class='panel panel-default'>
+			<div class="panel-heading">
+				<h4 class="panel-title">{{ node + 1 }}</h4>
+			</div>
+				<table class="table" id="current_laps_{{ node }}">
+					<thead>
+						<tr>
+							<th>Lap</th>
+							<th>Lap Time</th>
+						</tr>
+					</thead>
+					<tbody>
+					</tbody>
+				</table>
+		</div>
+	</div>
+	{% endfor %}
+</div>

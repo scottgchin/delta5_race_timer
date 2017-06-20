@@ -93,7 +93,13 @@ class Frequency(DB.Model):
 @APP.route('/')
 def index():
     '''Route to round summary page.'''
-    return render_template('rounds.html', async_mode=SOCKET_IO.async_mode)
+    return render_template('rounds.html')
+
+@APP.route('/heats')
+def heats():
+    '''Route to heat summary page.'''
+    return render_template('heats.html', num_nodes=RACE.num_nodes, heats=Heat, \
+        pilots=Pilot, frequencies=[node.frequency for node in INTERFACE.nodes])
 
 @APP.route('/race')
 def race():
@@ -158,6 +164,46 @@ def on_set_pilot_position(data):
     db_update.pilot_id = pilot
     DB.session.commit()
 
+@SOCKET_IO.on('add_heat')
+def on_add_heat():
+    '''Adds the next available heat number in the database.'''
+    max_heat_id = DB.session.query(DB.func.max(Heat.heat_id)).scalar()
+    for node in range(RACE.num_nodes): # Add next heat with pilots 1 thru 5
+        DB.session.add(Heat(heat_id=max_heat_id+1, node_index=node, pilot_id=node+1))
+    DB.session.commit()
+    emit_node_data()
+
+@SOCKET_IO.on('reset_heats')
+def on_reset_heats():
+    '''Resets to one heat with default pilots.'''
+    DB.session.query(Heat).delete() # Remove all heats
+    DB.session.commit()
+    for node in range(RACE.num_nodes): # Add back heat 1 with pilots 1 thru 5
+        DB.session.add(Heat(heat_id=1, node_index=node, pilot_id=node+1))
+    DB.session.commit()
+    emit_node_data()
+
+@SOCKET_IO.on('add_pilot')
+def on_add_heat():
+    '''Adds the next available pilot id number in the database.'''
+    max_pilot_id = DB.session.query(DB.func.max(Pilot.pilot_id)).scalar()
+    DB.session.add(Pilot(pilot_id=max_pilot_id+1, callsign='callsign{0}'.format(max_pilot_id+1), \
+        name='Pilot Name'))
+    DB.session.commit()
+    emit_node_data()
+
+@SOCKET_IO.on('reset_pilots')
+def on_reset_heats():
+    '''Results default pilots for nodes detected.'''
+    DB.session.query(Pilot).delete() # Remove all pilots
+    DB.session.commit()
+    DB.session.add(Pilot(pilot_id='0', callsign='-', name='-'))
+    for node in range(RACE.num_nodes): # Add back heat 1 with pilots 1 thru 5
+        DB.session.add(Pilot(pilot_id=node+1, callsign='callsign{0}'.format(node+1), \
+            name='Pilot Name'))
+    DB.session.commit()
+    emit_node_data()
+
 # Race management socket io events
 
 @SOCKET_IO.on('start_race')
@@ -195,6 +241,8 @@ def on_save_laps():
 @SOCKET_IO.on('clear_laps')
 def on_clear_laps():
     '''Command to clear the current laps due to false start or practice.'''
+    DB.session.query(CurrentLap).delete() # Clear out the current laps table
+    DB.session.commit()
 
 # Socket io emit functions
 
@@ -327,6 +375,84 @@ def default_frequencies():
         else:
             INTERFACE.set_frequency(index, frequencies_raceband[index])
 
+# How to move this to a seperate file?
+def db_init():
+    '''Initialize database.'''
+
+    print 'Start database initialization.'
+
+    DB.create_all()
+
+    # Create default pilots list
+    DB.session.add(Pilot(pilot_id='0', callsign='-', name='-'))
+    for node in range(RACE.num_nodes):
+        DB.session.add(Pilot(pilot_id=node+1, callsign='callsign{0}'.format(node+1), \
+            name='Pilot Name'))
+    DB.session.commit()
+
+    # Create default heat 1
+    for node in range(RACE.num_nodes):
+        DB.session.add(Heat(heat_id=1, node_index=node, pilot_id=node+1))
+    DB.session.commit()
+
+    # Add frequencies
+    DB.session.query(Frequency).delete()
+    DB.session.commit()
+    # IMD Channels
+    DB.session.add(Frequency(band='IMD', channel='E2', frequency='5685'))
+    DB.session.add(Frequency(band='IMD', channel='F2', frequency='5760'))
+    DB.session.add(Frequency(band='IMD', channel='F4', frequency='5800'))
+    DB.session.add(Frequency(band='IMD', channel='F7', frequency='5860'))
+    DB.session.add(Frequency(band='IMD', channel='E6', frequency='5905'))
+    DB.session.add(Frequency(band='IMD', channel='E4', frequency='5645'))
+    # Raceband
+    DB.session.add(Frequency(band='C', channel='C1', frequency='5658'))
+    DB.session.add(Frequency(band='C', channel='C2', frequency='5695'))
+    DB.session.add(Frequency(band='C', channel='C3', frequency='5732'))
+    DB.session.add(Frequency(band='C', channel='C4', frequency='5769'))
+    DB.session.add(Frequency(band='C', channel='C5', frequency='5806'))
+    DB.session.add(Frequency(band='C', channel='C6', frequency='5843'))
+    DB.session.add(Frequency(band='C', channel='C7', frequency='5880'))
+    DB.session.add(Frequency(band='C', channel='C8', frequency='5917'))
+    # Fatshark
+    # DB.session.add(Frequency(band='F', channel='F1', frequency='5740'))
+    # DB.session.add(Frequency(band='F', channel='F2', frequency='5760'))
+    # DB.session.add(Frequency(band='F', channel='F3', frequency='5780'))
+    # DB.session.add(Frequency(band='F', channel='F4', frequency='5800'))
+    # DB.session.add(Frequency(band='F', channel='F5', frequency='5820'))
+    # DB.session.add(Frequency(band='F', channel='F6', frequency='5840'))
+    # DB.session.add(Frequency(band='F', channel='F7', frequency='5860'))
+    # DB.session.add(Frequency(band='F', channel='F8', frequency='5880'))
+
+    # DB.session.add(Frequency(band='E', channel='E1', frequency='5705'))
+    # DB.session.add(Frequency(band='E', channel='E2', frequency='5685'))
+    # DB.session.add(Frequency(band='E', channel='E3', frequency='5665'))
+    # DB.session.add(Frequency(band='E', channel='E4', frequency='5645'))
+    # DB.session.add(Frequency(band='E', channel='E5', frequency='5885'))
+    # DB.session.add(Frequency(band='E', channel='E6', frequency='5905'))
+    # DB.session.add(Frequency(band='E', channel='E7', frequency='5925'))
+    # DB.session.add(Frequency(band='E', channel='E8', frequency='5945'))
+
+    # DB.session.add(Frequency(band='B', channel='B1', frequency='5733'))
+    # DB.session.add(Frequency(band='B', channel='B2', frequency='5752'))
+    # DB.session.add(Frequency(band='B', channel='B3', frequency='5771'))
+    # DB.session.add(Frequency(band='B', channel='B4', frequency='5790'))
+    # DB.session.add(Frequency(band='B', channel='B5', frequency='5809'))
+    # DB.session.add(Frequency(band='B', channel='B6', frequency='5828'))
+    # DB.session.add(Frequency(band='B', channel='B7', frequency='5847'))
+    # DB.session.add(Frequency(band='B', channel='B8', frequency='5866'))
+
+    # DB.session.add(Frequency(band='A', channel='A1', frequency='5865'))
+    # DB.session.add(Frequency(band='A', channel='A2', frequency='5845'))
+    # DB.session.add(Frequency(band='A', channel='A3', frequency='5825'))
+    # DB.session.add(Frequency(band='A', channel='A4', frequency='5805'))
+    # DB.session.add(Frequency(band='A', channel='A5', frequency='5785'))
+    # DB.session.add(Frequency(band='A', channel='A6', frequency='5765'))
+    # DB.session.add(Frequency(band='A', channel='A7', frequency='5745'))
+    # DB.session.add(Frequency(band='A', channel='A8', frequency='5725'))
+
+    DB.session.commit()
+
 #
 # Program Initialize
 #
@@ -336,19 +462,10 @@ print 'Number of nodes found: {0}'.format(RACE.num_nodes)
 
 gevent.sleep(0.500) # Delay to get I2C addresses
 default_frequencies()
+
 INTERFACE.set_calibration_threshold_global(80)
 
-DB.session.query(CurrentLap).delete() # Clear out the current laps table
-DB.session.commit()
-
-
-# Test data
-# DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=0, lap_time_stamp=5000, lap_time=5000))
-# DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=1, lap_time_stamp=15000, lap_time=10000))
-# DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=2, lap_time_stamp=30000, lap_time=15000))
-# DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=0, lap_time_stamp=6000, lap_time=6000))
-# DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=1, lap_time_stamp=15000, lap_time=9000))
-# DB.session.commit()
+# db_init() # Run database initialization function, fun once then comment out
 
 if __name__ == '__main__':
     SOCKET_IO.run(APP, host='0.0.0.0', debug=True)

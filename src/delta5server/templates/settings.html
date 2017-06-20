@@ -1,4 +1,4 @@
-{% extends "layout.html" %} {% block title %}Settings{% endblock %} {% block head %}
+ {% extends "layout.html" %} {% block title %}Settings{% endblock %} {% block head %}
 <script type="text/javascript" charset="utf-8">
 	$(document).ready(function () {
 		var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
@@ -42,6 +42,42 @@
 			};
 			socket.emit('set_pilot_position', data);
 		})
+
+		$('button#add_heat').click(function (event) {
+			socket.emit('add_heat');
+			window.location.href = "/settings"; // Update to not need page reload
+			// This isn't getting an updated database I think
+			// $( "#heats" ).empty();
+			// document.getElementById("heats").innerHTML = // jinja template include
+			return false;
+		});
+
+		$('button#add_pilot').click(function (event) {
+			socket.emit('add_pilot');
+			window.location.href = "/settings"; // Update to not need page reload
+			// This isn't getting an updated database I think
+			// $( "#heats" ).empty();
+			// document.getElementById("heats").innerHTML = // jinja template include
+			return false;
+		});
+
+		$('button#clear_rounds').click(function (event) {
+			socket.emit('clear_rounds');
+			window.location.href = "/settings"; // Update to not need page reload
+			return false;
+		});
+
+		$('button#reset_heats').click(function (event) {
+			socket.emit('reset_heats');
+			window.location.href = "/settings"; // Update to not need page reload
+			return false;
+		});
+
+		$('button#reset_pilots').click(function (event) {
+			socket.emit('reset_pilots');
+			window.location.href = "/settings"; // Update to not need page reload
+			return false;
+		});
 	});
 
 </script>
@@ -49,143 +85,33 @@
 
 <!--Display node data-->
 <h4>Node Data</h4>
-
-<div class="container">
-	{% for node in range(num_nodes) %}
-	<div class='col-xs-6 col-md-3'>
-		<div class='panel panel-default'>
-			<div class="panel-heading">
-				<h4 class="panel-title">{{ node + 1 }}</h4>
-			</div>
-			<table class="table">
-				<tr>
-					<td>Frequency</td>
-					<td>
-						<div class="btn-group">
-							<button class="btn btn-default dropdown-toggle channel_{{ node }}" type="button" data-toggle="dropdown" aria-haspopup="true"
-							 aria-expanded="true"></button>
-							<ul class="dropdown-menu set_frequency">
-								{% for frequency in frequencies.query.all() %}
-								<li><a role="button" data-node="{{ node }}" data-frequency="{{ frequency.frequency }}">{{ frequency.channel }} {{ frequency.frequency }}</a></li>
-								{% endfor %}
-							</ul>
-						</div>
-					</td>
-				</tr>
-				<tr>
-					<td>RSSI</td>
-					<td>
-						<div class="current_rssi_{{ node }}"></div>
-					</td>
-				</tr>
-				<tr>
-					<td>Trigger</td>
-					<td>
-						<div class="trigger_rssi_{{ node }}"></div>
-					</td>
-				</tr>
-				<tr>
-					<td>Peak</td>
-					<td>
-						<div class="peak_rssi_{{ node }}"></div>
-					</td>
-				</tr>
-			</table>
-		</div>
-	</div>
-	{% endfor %}
-</div>
+{% include "build_nodes.html" %}
 
 <!--Heats list for editing-->
-<h4>Heats</h4>
-
-<div class="container">
-	{% for heat in heats.query.with_entities(heats.heat_id).distinct() %}
-	<div class='col-xs-6 col-md-3'>
-		<div class='panel panel-default'>
-			<div class="panel-heading">
-				<h4 class="panel-title">{{ heat.heat_id }}</h4>
-			</div>
-			<table class="table">
-				{% for node in range(num_nodes) %}
-				<tr>
-					<td>
-						<div class="channel_{{ node }}"></div>
-					</td>
-					<td>
-						<div class="btn-group">
-							<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
-								{{ pilots.query.filter_by(pilot_id=
-									heats.query.filter_by(heat_id=heat.heat_id,node_index=node).first().pilot_id
-									).first().callsign }}
-								</button>
-							<ul class="dropdown-menu set_pilot_position">
-								{% for pilot in pilots.query.all() %}
-								<li><a role="button" data-heat="{{ heat.heat_id }}" data-node="{{ node }}" data-pilot="{{ pilot.pilot_id }}">{{ pilot.callsign }}</a></li>
-								{% endfor %}
-							</ul>
-						</div>
-					</td>
-				</tr>
-				{% endfor %}
-			</table>
-		</div>
-	</div>
-	{% endfor %}
+<h4>Heats
+<button type="button" class="btn btn-default" id="add_heat" onclick="this.blur();">Add Heat</button>
+</h4>
+<div id="heats">
+	{% include "build_heats_edit.html" %}
 </div>
-<div>
-	<button type="button" class="btn btn-default" id="add_heat" onclick="this.blur();">Add Heat</button>
-</div>
-
 
 <!--Pilots list for editing-->
-<h4>Pilots</h4>
-
-<div class="container">
-	<div class='col-xs-12 col-md-6'>
-		<div class='panel panel-default'>
-			<table class="table">
-				<thead>
-					<tr>
-						<th>Pilot ID</th>
-						<th>Call Sign</th>
-						<th>Name</th>
-					</tr>
-				</thead>
-				<tbody>
-					{% for pilot in pilots.query.all() %}
-					<!--If pilot.id not equal 0 to skip the blank name position-->
-					<tr>
-						<td>{{ pilot.pilot_id }}</td>
-						<td>{{ pilot.callsign }}</td>
-						<td>{{ pilot.name }}</td>
-					</tr>
-					{% endfor %}
-				</tbody>
-			</table>
-		</div>
-	</div>
-</div>
+<h4>Pilots
+<button type="button" class="btn btn-default" id="add_pilot" onclick="this.blur();">Add Pilot</button>
+</h4>
+{% include "build_pilots.html" %}
 
 <!--Clear saved rounds, reset heats, reset pilots-->
 <h4>Database Commands</h4>
-
+<!--Look into the consequences of clearing the heat or pilots with many race rounds saved that reference deleted pilots-->
 <div>
 	<button type="button" class="btn btn-default" id="clear_rounds" onclick="this.blur();">Clear Rounds</button>
 	<button type="button" class="btn btn-default" id="reset_heats" onclick="this.blur();">Reset Heats</button>
 	<button type="button" class="btn btn-default" id="reset_pilots" onclick="this.blur();">Reset Pilots</button>
 </div>
 
-<!--Reset the database-->
-<h4>Reset Database (Warning, destroys all data)</h4>
-
-<div>
-	<button type="button" class="btn btn-default" id="reset_database" onclick="this.blur();">Reset Database</button>
-</div>
-
 <!--Status messages from the timing system-->
 <h4>Hardware Log</h4>
-
 <div id="log"></div>
 
 {% endblock %}

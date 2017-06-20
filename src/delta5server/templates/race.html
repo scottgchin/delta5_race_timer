@@ -70,7 +70,7 @@
 </script>
 {% endblock %} {% block content %}
 
-<!--Button for controlling the race-->
+<!--Buttons for controlling the race-->
 <div>
 	<button type="button" class="btn btn-default" id="start_race" onclick="this.blur();">Start Race</button>
 	<button type="button" class="btn btn-default" id="start_race_2min" onclick="this.blur();">Start Race 2min</button>
@@ -90,44 +90,13 @@
 </div>
 
 <!--Display the timing clock-->
-<div id="timer">
-	<script type="text/javascript">
-		$(document).ready(function () { $('#timer').load('buildTimer.php') });
-	</script>
-</div>
+<h4>Timer</h4>
 
 <!--Display the race leaderboard-->
-<h6>Leaderboard</h6>
-<div id="leaderboard">
-	<script type="text/javascript">
-		$(document).ready(function () { setInterval(function () { $('#leaderboard').load('buildLeaderboard.php') }, 2000); });
-	</script>
-</div>
-
+<h4>Leaderboard</h4>
 
 <!--Display the current laps-->
 <h4>Laps</h4>
-
-<div class="container">
-	{% for node in range(num_nodes) %}
-	<div class="col-xs-6 col-md-2">
-		<div class='panel panel-default'>
-			<div class="panel-heading">
-				<h4 class="panel-title">{{ node + 1 }}</h4>
-			</div>
-				<table class="table" id="current_laps_{{ node }}">
-					<thead>
-						<tr>
-							<th>Lap</th>
-							<th>Lap Time</th>
-						</tr>
-					</thead>
-					<tbody>
-					</tbody>
-				</table>
-		</div>
-	</div>
-	{% endfor %}
-</div>
+{% include "build_current_laps.html" %}
 
 {% endblock %}

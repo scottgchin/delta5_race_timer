@@ -154,6 +154,7 @@ class Delta5Interface(BaseHardwareInterface):
         while success is False and retry_count < I2C_RETRY_COUNT:
             try:
                 with self.semaphore: # Wait if i2c comms is already in progress
+                    gevent.sleep(I2C_CHILL_TIME)
                     data = self.i2c.read_i2c_block_data(addr, offset, size + 1)
                     if validate_checksum(data):
                         success = True
@@ -179,6 +180,7 @@ class Delta5Interface(BaseHardwareInterface):
         while success is False and retry_count < I2C_RETRY_COUNT:
             try:
                 with self.semaphore: # Wait if i2c comms is already in progress
+                    gevent.sleep(I2C_CHILL_TIME)
                     self.i2c.write_i2c_block_data(addr, offset, data_with_checksum)
                     success = True
                     gevent.sleep(I2C_CHILL_TIME)

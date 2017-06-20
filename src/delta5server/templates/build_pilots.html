@@ -1,0 +1,26 @@
+
+<div class="container">
+	<div class='col-xs-12 col-md-6'>
+		<div class='panel panel-default'>
+			<table class="table">
+				<thead>
+					<tr>
+						<th>Pilot ID</th>
+						<th>Call Sign</th>
+						<th>Name</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for pilot in pilots.query.all() %}
+					<!--If pilot.id not equal 0 to skip the blank name position-->
+					<tr>
+						<td>{{ pilot.pilot_id }}</td>
+						<td>{{ pilot.callsign }}</td>
+						<td>{{ pilot.name }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
