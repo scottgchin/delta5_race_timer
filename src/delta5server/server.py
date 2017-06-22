@@ -228,13 +228,13 @@ def start_race():
     '''Common race start events.'''
     print 'Start race common function.'
     on_clear_laps() # Also clear the current laps
-    emit_current_laps()
+    emit_current_laps() # Sends out the blank laps to update the webpage
     INTERFACE.enable_calibration_mode() # Prep nodes to reset triggers on next pass
     gevent.sleep(0.500) # Make this random 2 to 5 seconds
     RACE.race_status = True # To enable registering passed laps
     RACE_START = datetime.now() # Update the race start time stamp
     server_log('Race started at {0}'.format(RACE_START))
-    emit_node_data() # Just to see the values on the start line
+    emit_node_data() # To see the values on the start line
 
 @SOCKET_IO.on('stop_race')
 def on_race_status():
@@ -432,6 +432,7 @@ def db_init():
 
     # Create default pilots list
     DB.session.query(Pilot).delete()
+    DB.session.commit()
     DB.session.add(Pilot(pilot_id='0', callsign='-', name='-'))
     for node in range(RACE.num_nodes):
         DB.session.add(Pilot(pilot_id=node+1, callsign='callsign{0}'.format(node+1), \
@@ -440,12 +441,14 @@ def db_init():
 
     # Create default heat 1
     DB.session.query(Heat).delete()
+    DB.session.commit()
     for node in range(RACE.num_nodes):
         DB.session.add(Heat(heat_id=1, node_index=node, pilot_id=node+1))
     DB.session.commit()
 
     # Add frequencies
     DB.session.query(Frequency).delete()
+    DB.session.commit()
     # IMD Channels
     DB.session.add(Frequency(band='IMD', channel='E2', frequency='5685'))
     DB.session.add(Frequency(band='IMD', channel='F2', frequency='5760'))
@@ -513,7 +516,7 @@ default_frequencies()
 
 INTERFACE.set_calibration_threshold_global(80)
 
-# db_init() # Run database initialization function, fun once then comment out
+# db_init() # Run database initialization function, run once then comment out
 
 if __name__ == '__main__':
     SOCKET_IO.run(APP, host='0.0.0.0', debug=True)

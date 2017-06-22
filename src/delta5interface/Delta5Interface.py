@@ -21,10 +21,9 @@ WRITE_CALIBRATION_MODE = 0x66
 WRITE_CALIBRATION_OFFSET = 0x67
 WRITE_TRIGGER_THRESHOLD = 0x68
 
-UPDATE_SLEEP = 0.1 # Main update loop delay
+UPDATE_SLEEP = 0.01 # Main update loop delay
 
-I2C_CHILL_TIME = 0.05 # Delay after i2c read/write
-I2C_RETRY_SLEEP = 0.05 # Delay for i2c retries
+I2C_CHILL_TIME = 0.075 # Delay after i2c read/write
 I2C_RETRY_COUNT = 5 # Limit of i2c retries
 
 def unpack_8(data):
@@ -70,6 +69,7 @@ class Delta5Interface(BaseHardwareInterface):
 
         self.i2c = smbus.SMBus(1) # Start i2c bus
         self.semaphore = BoundedSemaphore(1) # Limits i2c to 1 read/write at a time
+        self.i2c_timestamp = -1
 
         # Scans all i2c_addrs to populate nodes array
         self.nodes = [] # Array to hold each node object
@@ -146,6 +146,15 @@ class Delta5Interface(BaseHardwareInterface):
     # I2C Common Functions
     #
 
+    def i2c_sleep(self):
+        if self.i2c_timestamp == -1:
+            return
+        time_passed = self.milliseconds() - self.i2c_timestamp
+        time_remaining = (I2C_CHILL_TIME * 1000) - time_passed
+        if (time_remaining > 0):
+            # print("i2c sleep {0}".format(time_remaining))
+            gevent.sleep(time_remaining / 1000.0)
+
     def read_block(self, addr, offset, size):
         '''Read i2c data given an address, code, and data size.'''
         success = False
@@ -154,20 +163,19 @@ class Delta5Interface(BaseHardwareInterface):
         while success is False and retry_count < I2C_RETRY_COUNT:
             try:
                 with self.semaphore: # Wait if i2c comms is already in progress
-                    gevent.sleep(I2C_CHILL_TIME)
+                    self.i2c_sleep()
                     data = self.i2c.read_i2c_block_data(addr, offset, size + 1)
+                    self.i2c_timestamp = self.milliseconds()
                     if validate_checksum(data):
                         success = True
-                        gevent.sleep(I2C_CHILL_TIME)
                         data = data[:-1]
                     else:
                         # self.log('Invalid Checksum ({0}): {1}'.format(retry_count, data))
                         retry_count = retry_count + 1
-                        gevent.sleep(I2C_RETRY_SLEEP)
             except IOError as err:
                 self.log(err)
+                self.i2c_timestamp = self.milliseconds()
                 retry_count = retry_count + 1
-                gevent.sleep(I2C_RETRY_SLEEP)
         return data
 
     def write_block(self, addr, offset, data):
@@ -180,14 +188,14 @@ class Delta5Interface(BaseHardwareInterface):
         while success is False and retry_count < I2C_RETRY_COUNT:
             try:
                 with self.semaphore: # Wait if i2c comms is already in progress
-                    gevent.sleep(I2C_CHILL_TIME)
+                    self.i2c_sleep()
                     self.i2c.write_i2c_block_data(addr, offset, data_with_checksum)
+                    self.i2c_timestamp = self.milliseconds()
                     success = True
-                    gevent.sleep(I2C_CHILL_TIME)
             except IOError as err:
                 self.log(err)
+                self.i2c_timestamp = self.milliseconds()
                 retry_count = retry_count + 1
-                gevent.sleep(I2C_RETRY_SLEEP)
         return success
 
     #

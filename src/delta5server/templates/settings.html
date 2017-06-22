@@ -75,11 +75,13 @@
 
 		$('button#reset_heats').click(function (event) {
 			socket.emit('reset_heats');
+			window.location.href = "/settings"; // Update to not need page reload
 			return false;
 		});
 
 		$('button#reset_pilots').click(function (event) {
 			socket.emit('reset_pilots');
+			window.location.href = "/settings"; // Update to not need page reload
 			return false;
 		});
 	});

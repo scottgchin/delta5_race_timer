@@ -1,10 +1,18 @@
-
+from datetime import datetime
+from datetime import timedelta
 
 class BaseHardwareInterface(object):
     def __init__(self):
         self.calibration_threshold = 20
         self.calibration_offset = 10
         self.trigger_threshold = 20
+        self.start_time = datetime.now()
+
+    # returns the elapsed milliseconds since the start of the program
+    def milliseconds(self):
+       dt = datetime.now() - self.start_time
+       ms = (dt.days * 24 * 60 * 60 + dt.seconds) * 1000 + dt.microseconds / 1000.0
+       return ms
 
     #
     # Get Json Node Data Functions

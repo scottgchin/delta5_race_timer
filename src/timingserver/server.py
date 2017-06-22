@@ -6,8 +6,6 @@ gevent.monkey.patch_all()
 from flask import Flask, render_template, session, request
 from flask_socketio import SocketIO, emit, join_room, leave_room, \
     close_room, rooms, disconnect
-from datetime import datetime
-from datetime import timedelta
 
 import sys
 
@@ -30,13 +28,6 @@ socketio = SocketIO(app, async_mode=async_mode)
 heartbeat_thread = None
 
 firmware_version = {'major': 0, 'minor': 1}
-start_time = datetime.now()
-
-# returns the elapsed milliseconds since the start of the program
-def milliseconds():
-   dt = datetime.now() - start_time
-   ms = (dt.days * 24 * 60 * 60 + dt.seconds) * 1000 + dt.microseconds / 1000.0
-   return ms
 
 @app.route('/')
 def index():
@@ -69,7 +60,7 @@ def on_get_version():
 
 @socketio.on('get_timestamp')
 def on_get_timestamp():
-    return {'timestamp': milliseconds()}
+    return {'timestamp': hardwareInterface.milliseconds()}
 
 @socketio.on('get_settings')
 def on_get_settings():
@@ -112,15 +103,15 @@ def on_enable_calibration_mode():
 def on_simulate_pass(data):
     index = data['node']
     # todo: how should frequency be sent?
-    emit('pass_record', {'node': index, 'frequency': hardwareInterface.nodes[index].frequency, 'timestamp': milliseconds()}, broadcast=True)
+    emit('pass_record', {'node': index, 'frequency': hardwareInterface.nodes[index].frequency, 'timestamp': hardwareInterface.milliseconds()}, broadcast=True)
 
 def pass_record_callback(node, ms_since_lap):
-    print('Pass record from {0}{1}: {2}, {3}'.format(node.index, node.frequency, ms_since_lap, milliseconds() - ms_since_lap))
+    print('Pass record from {0}{1}: {2}, {3}'.format(node.index, node.frequency, ms_since_lap, hardwareInterface.milliseconds() - ms_since_lap))
     #TODO: clean this up
     socketio.emit('pass_record', {
         'node': node.index,
         'frequency': node.frequency,
-        'timestamp': milliseconds() - ms_since_lap,
+        'timestamp': hardwareInterface.milliseconds() - ms_since_lap,
         'trigger_rssi': node.trigger_rssi,
         'peak_rssi_raw': node.peak_rssi_raw,
         'peak_rssi': node.peak_rssi})
