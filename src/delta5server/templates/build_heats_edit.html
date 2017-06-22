@@ -14,7 +14,7 @@
 					</td>
 					<td>
 						<div class="btn-group">
-							<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+							<button class="btn btn-default dropdown-toggle heat_{{ heat.heat_id }}_node_{{ node }}" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
 								{{ pilots.query.filter_by(pilot_id=
 									heats.query.filter_by(heat_id=heat.heat_id,node_index=node).first().pilot_id
 									).first().callsign }}

@@ -1,10 +1,18 @@
-{% extends "layout.html" %} {% block title %}Settings{% endblock %} {% block head %}
+{% extends "layout.html" %} {% block title %}Race{% endblock %} {% block head %}
 <script type="text/javascript" charset="utf-8">
 	$(document).ready(function () {
 		var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
 
 		socket.on('race_status_set', function (msg) {
 			$('#race_status').html(msg.race_status);
+		});
+
+		socket.on('node_data', function (msg) {
+			for (i = 0; i < msg.frequency.length; i++) {
+				$('.channel_' + i).html(msg.channel[i] + ' ' + msg.frequency[i]);
+				$('.trigger_rssi_' + i).html(msg.trigger_rssi[i]);
+				$('.peak_rssi_' + i).html(msg.peak_rssi[i]);
+			}
 		});
 
 		socket.on('current_laps', function (msg) {
@@ -19,12 +27,17 @@
 			});
 		});
 
+		socket.on('current_heat', function (msg) {
+			$('.current_heat').html('Heat ' + msg.current_heat);
+		});
+
 		$('button#start_race').click(function (event) {
 			$('button#start_race').attr('disabled', 'disabled');
 			$('button#start_race_2min').attr('disabled', 'disabled');
 			$('button#stop_race').removeAttr('disabled');
 			$('button#save_laps').attr('disabled', 'disabled');
 			$('button#clear_laps').attr('disabled', 'disabled');
+			$('button#current_heat').attr('disabled', 'disabled');
 			socket.emit('start_race');
 			return false;
 		});
@@ -35,6 +48,7 @@
 			$('button#stop_race').removeAttr('disabled');
 			$('button#save_laps').attr('disabled', 'disabled');
 			$('button#clear_laps').attr('disabled', 'disabled');
+			$('button#current_heat').attr('disabled', 'disabled');
 			socket.emit('start_race_2min');
 			return false;
 		});
@@ -45,6 +59,7 @@
 			$("button#stop_race").attr('disabled', 'disabled');
 			$('button#save_laps').removeAttr('disabled');
 			$('button#clear_laps').removeAttr('disabled');
+			$('button#current_heat').removeAttr('disabled');
 			socket.emit('stop_race');
 			return false;
 		});
@@ -78,12 +93,12 @@
 	<button type="button" class="btn btn-default" id="save_laps" onclick="this.blur();">Save Laps</button>
 	<button type="button" class="btn btn-default" id="clear_laps" onclick="this.blur();">Clear Laps</button>
 	<div class="btn-group">
-		<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+		<button class="btn btn-default dropdown-toggle current_heat" id="current_heat" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
 		 Heat {{ current_heat }}
 		 </button>
 		<ul class="dropdown-menu set_current_heat">
 			{% for heat in heats.query.with_entities(heats.heat_id).distinct() %}
-			<li><a role="button" data-heat="heat"="{{ heat.heat_id }}">Heat {{ heat.heat_id }}</a></li>
+			<li><a role="button" data-heat="{{ heat.heat_id }}">Heat {{ heat.heat_id }}</a></li>
 			{% endfor %}
 		</ul>
 	</div>

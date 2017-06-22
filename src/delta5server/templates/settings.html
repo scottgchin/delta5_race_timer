@@ -19,11 +19,18 @@
 
 		socket.on('node_data', function (msg) {
 			for (i = 0; i < msg.frequency.length; i++) {
-				// $('.frequency_' + i).html(msg.trigger_rssi[i]); // Not used
 				$('.channel_' + i).html(msg.channel[i] + ' ' + msg.frequency[i]);
 				$('.trigger_rssi_' + i).html(msg.trigger_rssi[i]);
 				$('.peak_rssi_' + i).html(msg.peak_rssi[i]);
 			}
+		});
+
+		socket.on('heat_data', function (msg) {
+			$.each(msg.heat_id, function (i, heat_id) {
+				$.each(heat_id.callsign, function (j, callsign) {
+					$('.heat_' + (i+1) + '_node_' + j).html(callsign);
+				});
+			});
 		});
 
 		$('.set_frequency li a').click(function (event) {
@@ -63,19 +70,16 @@
 
 		$('button#clear_rounds').click(function (event) {
 			socket.emit('clear_rounds');
-			window.location.href = "/settings"; // Update to not need page reload
 			return false;
 		});
 
 		$('button#reset_heats').click(function (event) {
 			socket.emit('reset_heats');
-			window.location.href = "/settings"; // Update to not need page reload
 			return false;
 		});
 
 		$('button#reset_pilots').click(function (event) {
 			socket.emit('reset_pilots');
-			window.location.href = "/settings"; // Update to not need page reload
 			return false;
 		});
 	});

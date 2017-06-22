@@ -71,7 +71,10 @@ class SavedRace(DB.Model):
     id = DB.Column(DB.Integer, primary_key=True)
     round_id = DB.Column(DB.Integer, nullable=False)
     heat_id = DB.Column(DB.Integer, nullable=False)
+    node_index = DB.Column(DB.Integer, nullable=False)
     pilot_id = DB.Column(DB.Integer, nullable=False)
+    lap_id = DB.Column(DB.Integer, nullable=False)
+    lap_time_stamp = DB.Column(DB.Integer, nullable=False)
     lap_time = DB.Column(DB.Integer, nullable=False)
 
     def __repr__(self):
@@ -135,7 +138,7 @@ def connect_handler():
     if HEARTBEAT_THREAD is None:
         HEARTBEAT_THREAD = gevent.spawn(heartbeat_thread_function)
     emit_node_data()
-    # emit_current_laps()
+    emit_current_laps() # Needed for a new join to the race page
 
 @SOCKET_IO.on('disconnect')
 def disconnect_handler():
@@ -153,6 +156,14 @@ def on_set_frequency(data):
     INTERFACE.set_frequency(node_index, frequency)
     emit_node_data()
 
+@SOCKET_IO.on('add_heat')
+def on_add_heat():
+    '''Adds the next available heat number in the database.'''
+    max_heat_id = DB.session.query(DB.func.max(Heat.heat_id)).scalar()
+    for node in range(RACE.num_nodes): # Add next heat with pilots 1 thru 5
+        DB.session.add(Heat(heat_id=max_heat_id+1, node_index=node, pilot_id=node+1))
+    DB.session.commit()
+
 @SOCKET_IO.on('set_pilot_position')
 def on_set_pilot_position(data):
     '''Gets heat index, node index, and pilot it to update database.'''
@@ -163,15 +174,21 @@ def on_set_pilot_position(data):
     db_update = Heat.query.filter_by(heat_id=heat, node_index=node).first()
     db_update.pilot_id = pilot
     DB.session.commit()
+    emit_heat_data()
 
-@SOCKET_IO.on('add_heat')
+@SOCKET_IO.on('add_pilot')
 def on_add_heat():
-    '''Adds the next available heat number in the database.'''
-    max_heat_id = DB.session.query(DB.func.max(Heat.heat_id)).scalar()
-    for node in range(RACE.num_nodes): # Add next heat with pilots 1 thru 5
-        DB.session.add(Heat(heat_id=max_heat_id+1, node_index=node, pilot_id=node+1))
+    '''Adds the next available pilot id number in the database.'''
+    max_pilot_id = DB.session.query(DB.func.max(Pilot.pilot_id)).scalar()
+    DB.session.add(Pilot(pilot_id=max_pilot_id+1, callsign='callsign{0}'.format(max_pilot_id+1), \
+        name='Pilot Name'))
     DB.session.commit()
-    emit_node_data()
+
+@SOCKET_IO.on('clear_rounds')
+def on_reset_heats():
+    '''Clear all saved races.'''
+    DB.session.query(SavedRace).delete() # Remove all races
+    DB.session.commit()
 
 @SOCKET_IO.on('reset_heats')
 def on_reset_heats():
@@ -181,20 +198,10 @@ def on_reset_heats():
     for node in range(RACE.num_nodes): # Add back heat 1 with pilots 1 thru 5
         DB.session.add(Heat(heat_id=1, node_index=node, pilot_id=node+1))
     DB.session.commit()
-    emit_node_data()
-
-@SOCKET_IO.on('add_pilot')
-def on_add_heat():
-    '''Adds the next available pilot id number in the database.'''
-    max_pilot_id = DB.session.query(DB.func.max(Pilot.pilot_id)).scalar()
-    DB.session.add(Pilot(pilot_id=max_pilot_id+1, callsign='callsign{0}'.format(max_pilot_id+1), \
-        name='Pilot Name'))
-    DB.session.commit()
-    emit_node_data()
 
 @SOCKET_IO.on('reset_pilots')
 def on_reset_heats():
-    '''Results default pilots for nodes detected.'''
+    '''Resets default pilots for nodes detected.'''
     DB.session.query(Pilot).delete() # Remove all pilots
     DB.session.commit()
     DB.session.add(Pilot(pilot_id='0', callsign='-', name='-'))
@@ -202,27 +209,28 @@ def on_reset_heats():
         DB.session.add(Pilot(pilot_id=node+1, callsign='callsign{0}'.format(node+1), \
             name='Pilot Name'))
     DB.session.commit()
-    emit_node_data()
 
 # Race management socket io events
 
 @SOCKET_IO.on('start_race')
 def on_start_race():
     '''Starts the race and the timer counting up, no defined finish.'''
-    INTERFACE.enable_calibration_mode() # Prep nodes to reset triggers on next pass
-    gevent.sleep(0.500) # Make this random 2 to 5 seconds
+    start_race()
     SOCKET_IO.emit('start_timer') # Loop back to race page to start the timer counting up
-    RACE.race_status = True # To enable registering passed laps
-    RACE_START = datetime.now() # Update the race start time stamp
-    server_log('Race started at {0}'.format(RACE_START))
-    emit_node_data() # Just to see the values on the start line
 
 @SOCKET_IO.on('start_race_2_min')
 def on_start_race_2_min():
     '''Starts the race with a two minute countdown clock.'''
+    start_race()
+    SOCKET_IO.emit('start_timer_2min') # Loop back to race page to start a 2 min countdown
+
+def start_race():
+    '''Common race start events.'''
+    print 'Start race common function.'
+    on_clear_laps() # Also clear the current laps
+    emit_current_laps()
     INTERFACE.enable_calibration_mode() # Prep nodes to reset triggers on next pass
     gevent.sleep(0.500) # Make this random 2 to 5 seconds
-    SOCKET_IO.emit('start_timer_2min') # Loop back to race page to start a 2 min countdown
     RACE.race_status = True # To enable registering passed laps
     RACE_START = datetime.now() # Update the race start time stamp
     server_log('Race started at {0}'.format(RACE_START))
@@ -236,13 +244,32 @@ def on_race_status():
 
 @SOCKET_IO.on('save_laps')
 def on_save_laps():
-    '''Command to save current laps to the database and clear the current laps.'''
+    '''Save current laps to the database and clear the current laps.'''
+    # Get the last saved round for the current heat
+    max_round = DB.session.query(DB.func.max(SavedRace.round_id)) \
+            .filter_by(heat_id=RACE.current_heat).scalar()
+    print max_round
+
+    for node in range(RACE.num_nodes):
+        for lap in CurrentLap.query.filter_by(node_index=node).all():
+            DB.session.add(SavedRace(round_id=max_round+1, heat_id=RACE.current_heat, \
+                node_index=node, pilot_id=lap.pilot_id, lap_id=lap.lap_id, \
+                lap_time_stamp=lap.lap_time_stamp, lap_time=lap.lap_time))
+    DB.session.commit()
+    # on_clear_laps() # Also clear the current laps
 
 @SOCKET_IO.on('clear_laps')
 def on_clear_laps():
-    '''Command to clear the current laps due to false start or practice.'''
+    '''Clear the current laps due to false start or practice.'''
     DB.session.query(CurrentLap).delete() # Clear out the current laps table
     DB.session.commit()
+
+@SOCKET_IO.on('set_current_heat')
+def on_set_current_heat(data):
+    '''Update the current heat variable.'''
+    new_heat_id = data['heat']
+    RACE.current_heat = new_heat_id
+    emit_current_heat()
 
 # Socket io emit functions
 
@@ -269,6 +296,26 @@ def emit_current_laps():
         current_laps.append({'lap_id': node_laps, 'lap_time': node_lap_times})
     current_laps = {'node_index': current_laps}
     SOCKET_IO.emit('current_laps', current_laps)
+
+def emit_heat_data():
+    '''Emits heat_data json.'''
+    current_heats = []
+    for heat in Heat.query.with_entities(Heat.heat_id).distinct():
+        pilots = []
+        for node in range(RACE.num_nodes):
+            pilot_id = Heat.query.filter_by(heat_id=heat.heat_id, node_index=node).first().pilot_id
+            pilots.append(Pilot.query.filter_by(pilot_id=pilot_id).first().callsign)
+        current_heats.append({'callsign': pilots})
+    current_heats = {'heat_id': current_heats}
+    SOCKET_IO.emit('heat_data', current_heats)
+
+def emit_pilots():
+    '''Emits pilots json.'''
+    SOCKET_IO.emit('pilots')
+
+def emit_current_heat():
+    '''Emits current_heat json.'''
+    SOCKET_IO.emit('current_heat', {'current_heat': RACE.current_heat})
 
 #
 # Program Functions
@@ -307,7 +354,7 @@ def time_format(millis):
 def pass_record_callback(node, ms_since_lap):
     '''Logs and emits a completed lap.'''
     server_log('Raw pass record: Node: {0}, MS Since Lap: {1}'.format(node.index, ms_since_lap))
-    emit_node_data()
+    emit_node_data() # For updated triggers and peaks
 
     if RACE.race_status:
         # Get the current pilot id on the node
@@ -384,6 +431,7 @@ def db_init():
     DB.create_all()
 
     # Create default pilots list
+    DB.session.query(Pilot).delete()
     DB.session.add(Pilot(pilot_id='0', callsign='-', name='-'))
     for node in range(RACE.num_nodes):
         DB.session.add(Pilot(pilot_id=node+1, callsign='callsign{0}'.format(node+1), \
@@ -391,13 +439,13 @@ def db_init():
     DB.session.commit()
 
     # Create default heat 1
+    DB.session.query(Heat).delete()
     for node in range(RACE.num_nodes):
         DB.session.add(Heat(heat_id=1, node_index=node, pilot_id=node+1))
     DB.session.commit()
 
     # Add frequencies
     DB.session.query(Frequency).delete()
-    DB.session.commit()
     # IMD Channels
     DB.session.add(Frequency(band='IMD', channel='E2', frequency='5685'))
     DB.session.add(Frequency(band='IMD', channel='F2', frequency='5760'))
