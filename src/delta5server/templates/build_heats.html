@@ -10,13 +10,11 @@
 				{% for node in range(num_nodes) %}
 				<tr>
 					<td>
-						<!--Add channels info-->
-						{{ frequencies[node] }}
+						{{ channels[node] }} {{ frequencies[node] }}
 					</td>
 					<td>
-						{{ pilots.query.filter_by(pilot_id=
-							heats.query.filter_by(heat_id=heat.heat_id,node_index=node).first().pilot_id
-							).first().callsign }}
+						{{ pilots.query.filter_by(pilot_id= heats.query.filter_by(heat_id=heat.heat_id,node_index=node).first().pilot_id ).first().callsign
+						}}
 					</td>
 				</tr>
 				{% endfor %}

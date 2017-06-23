@@ -33,6 +33,13 @@
 			});
 		});
 
+		socket.on('pilot_data', function (msg) {
+			for (i = 0; i < msg.callsign.length; i++) {
+				$('.callsign_' + i).attr('value', msg.callsign[i]);
+				$('.name_' + i).attr('value', msg.name[i]);
+			}
+		});
+
 		$('.set_frequency li a').click(function (event) {
 			var data = {
 				node: parseInt($(this).data('node')),
@@ -48,6 +55,24 @@
 				pilot: parseInt($(this).data('pilot'))
 			};
 			socket.emit('set_pilot_position', data);
+		})
+
+		$('.set_pilot_callsign').change(function (event) {
+			
+			var data = {
+				pilot_id: parseInt($(this).data('pilot_id')),
+				callsign: $(this).val()
+			};
+			socket.emit('set_pilot_callsign', data);
+		})
+
+		$('.set_pilot_name').change(function (event) {
+			
+			var data = {
+				pilot_id: parseInt($(this).data('pilot_id')),
+				name: $(this).val()
+			};
+			socket.emit('set_pilot_name', data);
 		})
 
 		$('button#add_heat').click(function (event) {
@@ -97,6 +122,7 @@
 <h4>Heats
 <button type="button" class="btn btn-default" id="add_heat" onclick="this.blur();">Add Heat</button>
 </h4>
+<p>Don't change a heat after it has a saved race.</p>
 <div id="heats">
 	{% include "build_heats_edit.html" %}
 </div>
@@ -105,7 +131,8 @@
 <h4>Pilots
 <button type="button" class="btn btn-default" id="add_pilot" onclick="this.blur();">Add Pilot</button>
 </h4>
-{% include "build_pilots.html" %}
+<p>Spelling corrections only after saving races.</p>
+{% include "build_pilots_edit.html" %}
 
 <!--Clear saved rounds, reset heats, reset pilots-->
 <h4>Database Commands</h4>
