@@ -1,5 +1,5 @@
 
-<div class="container">
+<div class="row">
 	{% for heat in heats.query.with_entities(heats.heat_id).distinct() %}
 	<div class='col-xs-6 col-md-3'>
 		<div class='panel panel-default'>

@@ -140,10 +140,10 @@ def connect_handler():
     global HEARTBEAT_THREAD
     if HEARTBEAT_THREAD is None:
         HEARTBEAT_THREAD = gevent.spawn(heartbeat_thread_function)
-    emit_race_status() # Needed to set race button states
-    emit_node_data()
-    emit_current_laps() # Needed for a new join to the race page
-    emit_leaderboard() # Needed for a new join to the race page
+    emit_node_data() # Settings page, node channel and triggers
+    emit_race_status() # Race page, to set race button states
+    emit_current_laps() # Race page, load and current laps
+    emit_leaderboard() # Race page, load leaderboard for current laps
 
 @SOCKET_IO.on('disconnect')
 def disconnect_handler():
@@ -250,8 +250,8 @@ def on_start_race():
     start_race()
     SOCKET_IO.emit('start_timer') # Loop back to race page to start the timer counting up
 
-@SOCKET_IO.on('start_race_2_min')
-def on_start_race_2_min():
+@SOCKET_IO.on('start_race_2min')
+def on_start_race_2min():
     '''Starts the race with a two minute countdown clock.'''
     start_race()
     SOCKET_IO.emit('start_timer_2min') # Loop back to race page to start a 2 min countdown
@@ -260,18 +260,22 @@ def start_race():
     '''Common race start events.'''
     on_clear_laps() # Also clear the current laps
     emit_current_laps() # Sends out the blank laps to update the webpage
+    emit_leaderboard()
     INTERFACE.enable_calibration_mode() # Prep nodes to reset triggers on next pass
     gevent.sleep(0.500) # Make this random 2 to 5 seconds
-    RACE.race_status = True # To enable registering passed laps
+    RACE.race_status = 1 # To enable registering passed laps
     RACE_START = datetime.now() # Update the race start time stamp
     server_log('Race started at {0}'.format(RACE_START))
     emit_node_data() # To see the values on the start line
+    emit_race_status() # Race page, to set race button states
 
 @SOCKET_IO.on('stop_race')
 def on_race_status():
     '''Stops the racing and stops looking for laps.'''
     server_log('Race stopped')
-    RACE.race_status = False # To stop registering passed laps
+    RACE.race_status = 2 # To stop registering passed laps, waiting for laps to be cleared
+    emit_race_status() # Race page, to set race button states
+    SOCKET_IO.emit('stop_timer') # Loop back to race page to start the timer counting up
 
 @SOCKET_IO.on('save_laps')
 def on_save_laps():
@@ -296,9 +300,12 @@ def on_save_laps():
 def on_clear_laps():
     '''Clear the current laps due to false start or practice.'''
     server_log('Clearing current laps from the database')
+    RACE.race_status = 0 # Laps cleared, ready to start next race
     DB.session.query(CurrentLap).delete() # Clear out the current laps table
     DB.session.commit()
     emit_current_laps()
+    emit_leaderboard()
+    emit_race_status() # Race page, to set race button states
 
 @SOCKET_IO.on('set_current_heat')
 def on_set_current_heat(data):
@@ -307,6 +314,28 @@ def on_set_current_heat(data):
     server_log('Set current heat: Heat {0}'.format(new_heat_id))
     RACE.current_heat = new_heat_id
     emit_current_heat()
+    emit_race_status() # Race page, to set race button states
+
+@SOCKET_IO.on('delete_lap')
+def on_delete_lap(data):
+    '''Delete a false lap.'''
+    node_index = data['node']
+    lap_id = data['lapid']
+    server_log('Delete lap: Node {0} Lap {1}'.format(node_index, lap_id))
+    # Update the lap_time for the lap after
+    previous_lap = CurrentLap.query.filter_by(node_index=node_index, lap_id=lap_id-1).first()
+    next_lap = CurrentLap.query.filter_by(node_index=node_index, lap_id=lap_id+1).first()
+    next_lap.lap_time = next_lap.lap_time_stamp - previous_lap.lap_time_stamp
+    # Delete the false lap
+    CurrentLap.query.filter_by(node_index=node_index, lap_id=lap_id).delete()
+    # Update lap numbers
+    for lap in CurrentLap.query.filter_by(node_index=node_index).all():
+        if lap.lap_id > lap_id:
+            lap.lap_id = lap.lap_id - 1
+
+    DB.session.commit()
+    emit_current_laps()
+    emit_leaderboard()
 
 # Socket io emit functions
 
@@ -411,7 +440,7 @@ def emit_leaderboard():
 
     leaderboard_sorted = sorted(sorted(leaderboard, key=lambda x: x[0]), reverse=True, \
         key=lambda x: x[1])
-    print leaderboard_sorted
+    # print leaderboard_sorted
 
     # print ' '
     # print leaderboard_sorted[0]
@@ -499,7 +528,7 @@ def pass_record_callback(node, ms_since_lap):
     server_log('Raw pass record: Node: {0}, MS Since Lap: {1}'.format(node.index, ms_since_lap))
     emit_node_data() # For updated triggers and peaks
 
-    if RACE.race_status:
+    if RACE.race_status is 1:
         # Get the current pilot id on the node
         pilot_id = Heat.query.filter_by( \
             heat_id=RACE.current_heat, node_index=node.index).first().pilot_id

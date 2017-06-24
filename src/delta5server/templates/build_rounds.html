@@ -3,7 +3,7 @@
 <h4>Heat {{ heat.heat_id }}</h4>
 {% for round in rounds.query.with_entities(rounds.round_id).distinct().filter_by(heat_id=heat.heat_id) %}
 <h5>Round {{ round.round_id }}</h5>
-<div class="container">
+<div class="row">
     {% for node in range(num_nodes) %}
     <div class="col-xs-6 col-md-2">
         <div class='panel panel-default'>

@@ -28,7 +28,7 @@
 		socket.on('heat_data', function (msg) {
 			$.each(msg.heat_id, function (i, heat_id) {
 				$.each(heat_id.callsign, function (j, callsign) {
-					$('.heat_' + (i+1) + '_node_' + j).html(callsign);
+					$('.heat_' + (i + 1) + '_node_' + j).html(callsign);
 				});
 			});
 		});
@@ -58,7 +58,7 @@
 		})
 
 		$('.set_pilot_callsign').change(function (event) {
-			
+
 			var data = {
 				pilot_id: parseInt($(this).data('pilot_id')),
 				callsign: $(this).val()
@@ -67,7 +67,7 @@
 		})
 
 		$('.set_pilot_name').change(function (event) {
-			
+
 			var data = {
 				pilot_id: parseInt($(this).data('pilot_id')),
 				name: $(this).val()
@@ -120,7 +120,7 @@
 
 <!--Heats list for editing-->
 <h4>Heats
-<button type="button" class="btn btn-default" id="add_heat" onclick="this.blur();">Add Heat</button>
+	<button type="button" class="btn btn-default" id="add_heat" onclick="this.blur();">Add Heat</button>
 </h4>
 <p>Don't change a heat after it has a saved race.</p>
 <div id="heats">
@@ -129,7 +129,7 @@
 
 <!--Pilots list for editing-->
 <h4>Pilots
-<button type="button" class="btn btn-default" id="add_pilot" onclick="this.blur();">Add Pilot</button>
+	<button type="button" class="btn btn-default" id="add_pilot" onclick="this.blur();">Add Pilot</button>
 </h4>
 <p>Spelling corrections only after saving races.</p>
 {% include "build_pilots_edit.html" %}
@@ -145,6 +145,10 @@
 
 <!--Status messages from the timing system-->
 <h4>Hardware Log</h4>
-<div id="log"></div>
+<div class="row">
+	<div class='col-xs-12'>
+		<div id="log"></div>
+	</div>
+</div>
 
 {% endblock %}
