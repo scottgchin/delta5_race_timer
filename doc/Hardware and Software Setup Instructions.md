@@ -54,7 +54,7 @@ sudo raspi-config
 ```
 Go to Advanced Options, and enable I2C
 
-3. Install Python.
+3. Install Python
 ```
 sudo apt-get install python-dev
 ```
@@ -76,8 +76,8 @@ sudo pip install -r requirements.txt
 ```
 
 ### Receiver Node Arduino Code:
-1. Open '/delta5_race_timer/src/delta5node/delta5node.ino' in the Arduino IDE.
+1. Open '/delta5_race_timer/src/delta5node/delta5node.ino' in the Arduino IDE
 
-2. Configure 'i2cSlaveAddress' in the setup section of the .ino.
+2. Configure 'i2cSlaveAddress' in the setup section of the .ino
 
-3. Upload to each Arduino receiver node changing 'i2cSlaveAddress' each time.
+3. Upload to each Arduino receiver node changing 'i2cSlaveAddress' each time
