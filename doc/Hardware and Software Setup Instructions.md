@@ -47,11 +47,13 @@ Note: be sure all Receiver Nodes and the Raspberry Pi are tied to a common groun
   
 ### Raspberry Pi
 1. Start by instaling Raspbian, follow the official instructions here: https://www.raspberrypi.org/downloads/raspbian/, use 'RASPBIAN JESSIE WITH PIXEL'
+
 2. Enable I2C on the Raspberry Pi
 ```
 sudo raspi-config
 ```
 Go to Advanced Options, and enable I2C
+
 3. Install Python.
 ```
 sudo apt-get install python-dev
@@ -60,11 +62,14 @@ and install the python drivers for the GPIO
 ```
 sudo apt-get install python-rpi.gpio
 ```
+
 4. Final Update and upgrade
 ```
 sudo apt-get update && sudo apt-get upgrade
 ```
+
 5. Clone or download this repo to '/home/pi/' on the Raspberry Pi
+
 6. Open a terminal in the '/delta5_race_timer/src/delta5server' and run
 ```
 sudo pip install -r requirements.txt
