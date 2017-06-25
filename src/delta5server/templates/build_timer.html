@@ -7,6 +7,7 @@
 <audio id="countdown_tenseconds" src="./static/audio/countdown_tenseconds.mp3" type="audio/mp3"></audio>
 <audio id="callout_thirtyseconds" src="./static/audio/callout_thirtyseconds.mp3" type="audio/mp3"></audio>
 <audio id="callout_oneminute" src="./static/audio/callout_oneminute.mp3" type="audio/mp3"></audio>
+<audio id="callout_twominutes" src="./static/audio/callout_twominutes.mp3" type="audio/mp3"></audio>
 
 <script>
 	function _timer(callback) {
@@ -19,6 +20,7 @@
 		var countdown_tenseconds = $('countdown_tenseconds')[0];
 		var callout_thirtyseconds = $('callout_thirtyseconds')[0];
 		var callout_oneminute = $('callout_oneminute')[0];
+		var callout_twominutes = $('callout_twominutes')[0];
 
 		// Start the timer
 		this.start = function () {
@@ -95,7 +97,7 @@
 			}
 			if (timer.getMode() == 1) { // Count up clock
 				if (time == 0) { buzzer.play(); } // Start buzzer
-				// if (time == 120) { twomin.play(); } // 2 min call out
+				if (time == 120) { callout_twominutes.play(); } // 2 min call out
 			}
 			if (time == 30) { callout_thirtyseconds.play(); } // 30 second call out
 			if (time == 60) { callout_oneminute.play(); } // 1 min call out

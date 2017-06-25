@@ -3,14 +3,6 @@
 	$(document).ready(function () {
 		var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
 
-		function append_to_log(text) {
-			$('#log').prepend('<br>' + $('<div/>').text(text).html());
-		}
-
-		socket.on('hardware_log', function (msg) {
-			append_to_log(msg);
-		});
-
 		socket.on('heartbeat', function (msg) {
 			for (i = 0; i < msg.current_rssi.length; i++) {
 				$('.current_rssi_' + i).html(msg.current_rssi[i]);
@@ -93,20 +85,8 @@
 			return false;
 		});
 
-		$('button#clear_rounds').click(function (event) {
-			socket.emit('clear_rounds');
-			return false;
-		});
-
-		$('button#reset_heats').click(function (event) {
-			socket.emit('reset_heats');
-			window.location.href = "/settings"; // Update to not need page reload
-			return false;
-		});
-
-		$('button#reset_pilots').click(function (event) {
-			socket.emit('reset_pilots');
-			window.location.href = "/settings"; // Update to not need page reload
+		$('button#reset_database').click(function (event) {
+			socket.emit('reset_database');
 			return false;
 		});
 	});
@@ -135,20 +115,10 @@
 {% include "build_pilots_edit.html" %}
 
 <!--Clear saved rounds, reset heats, reset pilots-->
-<h4>Database Commands</h4>
+<h4>Database (Copy out your saved races first)</h4>
 <!--Look into the consequences of clearing the heat or pilots with many race rounds saved that reference deleted pilots-->
 <div>
-	<button type="button" class="btn btn-default" id="clear_rounds" onclick="this.blur();">Clear Rounds</button>
-	<button type="button" class="btn btn-default" id="reset_heats" onclick="this.blur();">Reset Heats</button>
-	<button type="button" class="btn btn-default" id="reset_pilots" onclick="this.blur();">Reset Pilots</button>
-</div>
-
-<!--Status messages from the timing system-->
-<h4>Hardware Log</h4>
-<div class="row">
-	<div class='col-xs-12'>
-		<div id="log"></div>
-	</div>
+	<button type="button" class="btn btn-danger" id="reset_database" onclick="this.blur();">Reset Database</button>
 </div>
 
 {% endblock %}

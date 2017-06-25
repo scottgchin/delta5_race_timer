@@ -63,6 +63,7 @@ class CurrentLap(DB.Model):
     lap_id = DB.Column(DB.Integer, nullable=False)
     lap_time_stamp = DB.Column(DB.Integer, nullable=False)
     lap_time = DB.Column(DB.Integer, nullable=False)
+    lap_time_formatted = DB.Column(DB.Integer, nullable=False)
 
     def __repr__(self):
         return '<CurrentLap %r>' % self.pilot_id
@@ -76,6 +77,7 @@ class SavedRace(DB.Model):
     lap_id = DB.Column(DB.Integer, nullable=False)
     lap_time_stamp = DB.Column(DB.Integer, nullable=False)
     lap_time = DB.Column(DB.Integer, nullable=False)
+    lap_time_formatted = DB.Column(DB.Integer, nullable=False)
 
     def __repr__(self):
         return '<SavedRace %r>' % self.round_id
@@ -83,7 +85,7 @@ class SavedRace(DB.Model):
 class Frequency(DB.Model):
     id = DB.Column(DB.Integer, primary_key=True)
     band = DB.Column(DB.Integer, nullable=False)
-    channel = DB.Column(DB.Integer, unique=True, nullable=False)
+    channel = DB.Column(DB.Integer, nullable=False)
     frequency = DB.Column(DB.Integer, nullable=False)
 
     def __repr__(self):
@@ -102,30 +104,34 @@ def index():
 @APP.route('/heats')
 def heats():
     '''Route to heat summary page.'''
-    return render_template('heats.html', num_nodes=RACE.num_nodes, heats=Heat, \
-        pilots=Pilot, frequencies=[node.frequency for node in INTERFACE.nodes], \
+    return render_template('heats.html', num_nodes=RACE.num_nodes, heats=Heat, pilots=Pilot, \
+        frequencies=[node.frequency for node in INTERFACE.nodes], \
         channels=[Frequency.query.filter_by(frequency=node.frequency).first().channel \
             for node in INTERFACE.nodes])
 
 @APP.route('/race')
 def race():
     '''Route to race management page.'''
-    return render_template('race.html', async_mode=SOCKET_IO.async_mode, \
-        num_nodes=RACE.num_nodes, current_heat=RACE.current_heat, heats=Heat, pilots=Pilot)
+    return render_template('race.html', num_nodes=RACE.num_nodes, current_heat=RACE.current_heat, \
+        heats=Heat, pilots=Pilot)
 
 @APP.route('/settings')
 def settings():
     '''Route to settings page.'''
-    return render_template('settings.html', async_mode=SOCKET_IO.async_mode, \
-        num_nodes=RACE.num_nodes, pilots=Pilot, frequencies=Frequency, heats=Heat)
+    return render_template('settings.html', num_nodes=RACE.num_nodes, pilots=Pilot, \
+        frequencies=Frequency, heats=Heat)
 
 # Debug Routes
+
+@APP.route('/hardwarelog')
+def hardwarelog():
+    '''Route to hardware log page.'''
+    return render_template('hardwarelog.html')
 
 @APP.route('/database')
 def database():
     '''Route to database page.'''
-    return render_template('database.html', \
-        pilots=Pilot, heats=Heat, currentlaps=CurrentLap, \
+    return render_template('database.html', pilots=Pilot, heats=Heat, currentlaps=CurrentLap, \
         savedraces=SavedRace, frequencies=Frequency, )
 
 #
@@ -134,12 +140,13 @@ def database():
 
 @SOCKET_IO.on('connect')
 def connect_handler():
-    '''Starts the delta 5 interface and starts a CURRENT_RSSI thread to emit node data.'''
+    '''Starts the delta 5 interface and a heartbeat thread for rssi.'''
     server_log('Client connected')
     INTERFACE.start()
     global HEARTBEAT_THREAD
     if HEARTBEAT_THREAD is None:
         HEARTBEAT_THREAD = gevent.spawn(heartbeat_thread_function)
+        server_log('Heartbeat thread started')
     emit_node_data() # Settings page, node channel and triggers
     emit_race_status() # Race page, to set race button states
     emit_current_laps() # Race page, load and current laps
@@ -147,100 +154,107 @@ def connect_handler():
 
 @SOCKET_IO.on('disconnect')
 def disconnect_handler():
-    '''Print disconnect event.'''
+    '''Emit disconnect event.'''
     server_log('Client disconnected')
 
 # Settings socket io events
 
 @SOCKET_IO.on('set_frequency')
 def on_set_frequency(data):
-    '''Gets node index and frequency to update a node.'''
+    '''Set node frequency.'''
     node_index = data['node']
     frequency = data['frequency']
-    server_log('Set frequency: Node {0} Frequency {1}'.format(node_index, frequency))
     INTERFACE.set_frequency(node_index, frequency)
-    emit_node_data()
+    server_log('Frequency set: Node {0} Frequency {1}'.format(node_index+1, frequency))
+    emit_node_data() # Settings page, new node channel
 
 @SOCKET_IO.on('add_heat')
 def on_add_heat():
-    '''Adds the next available heat number in the database.'''
-    server_log('Adding new heat')
+    '''Adds the next available heat number to the database.'''
     max_heat_id = DB.session.query(DB.func.max(Heat.heat_id)).scalar()
     for node in range(RACE.num_nodes): # Add next heat with pilots 1 thru 5
         DB.session.add(Heat(heat_id=max_heat_id+1, node_index=node, pilot_id=node+1))
     DB.session.commit()
+    server_log('Heat added: Heat {0}'.format(max_head_id+1))
 
 @SOCKET_IO.on('set_pilot_position')
 def on_set_pilot_position(data):
-    '''Gets heat index, node index, and pilot it to update database.'''
+    '''Sets a new pilot in a heat.'''
     heat = data['heat']
-    node = data['node']
+    node_index = data['node']
     pilot = data['pilot']
-    server_log('Set pilot position: Heat {0} Node {1} Pilot {2}'.format(heat, node, pilot))
     db_update = Heat.query.filter_by(heat_id=heat, node_index=node).first()
     db_update.pilot_id = pilot
     DB.session.commit()
-    emit_heat_data()
+    server_log('Pilot position set: Heat {0} Node {1} Pilot {2}'.format(heat, node_index+1, pilot))
+    emit_heat_data() # Settings page, new pilot position in heats
 
 @SOCKET_IO.on('add_pilot')
 def on_add_heat():
     '''Adds the next available pilot id number in the database.'''
-    server_log('Adding new pilot')
     max_pilot_id = DB.session.query(DB.func.max(Pilot.pilot_id)).scalar()
     DB.session.add(Pilot(pilot_id=max_pilot_id+1, callsign='callsign{0}'.format(max_pilot_id+1), \
         name='Pilot Name'))
     DB.session.commit()
+    server_log('Pilot added: Pilot {0}'.format(max_pilot_id+1))
 
 @SOCKET_IO.on('set_pilot_callsign')
 def on_set_pilot_callsign(data):
     '''Gets pilot callsign to update database.'''
     pilot_id = data['pilot_id']
     callsign = data['callsign']
-    server_log('Set pilot callsign: Pilot {0} Callsign {1}'.format(pilot_id, callsign))
     db_update = Pilot.query.filter_by(pilot_id=pilot_id).first()
     db_update.callsign = callsign
     DB.session.commit()
-    emit_pilot_data()
+    server_log('Pilot callsign set: Pilot {0} Callsign {1}'.format(pilot_id, callsign))
+    emit_pilot_data() # Settings page, new pilot callsign
 
 @SOCKET_IO.on('set_pilot_name')
 def on_set_pilot_name(data):
     '''Gets pilot name to update database.'''
     pilot_id = data['pilot_id']
     name = data['name']
-    server_log('Set pilot name: Pilot {0} Name {1}'.format(pilot_id, name))
     db_update = Pilot.query.filter_by(pilot_id=pilot_id).first()
     db_update.name = name
     DB.session.commit()
-    emit_pilot_data()
+    server_log('Pilot name set: Pilot {0} Name {1}'.format(pilot_id, name))
+    emit_pilot_data() # Settings page, new pilot name
 
-@SOCKET_IO.on('clear_rounds')
-def on_reset_heats():
-    '''Clear all saved races.'''
-    server_log('Clearing rounds')
-    DB.session.query(SavedRace).delete() # Remove all races
-    DB.session.commit()
+@SOCKET_IO.on('reset_database')
+def on_reset_database():
+    '''Reset database.'''
+    db_init()
+    server_log('Database reset')
 
-@SOCKET_IO.on('reset_heats')
-def on_reset_heats():
-    '''Resets to one heat with default pilots.'''
-    server_log('Resetting to default heat')
-    DB.session.query(Heat).delete() # Remove all heats
-    DB.session.commit()
-    for node in range(RACE.num_nodes): # Add back heat 1 with pilots 1 thru 5
-        DB.session.add(Heat(heat_id=1, node_index=node, pilot_id=node+1))
-    DB.session.commit()
+# @SOCKET_IO.on('clear_rounds')
+# def on_reset_heats():
+#     '''Clear all saved races.'''
+#     DB.session.query(SavedRace).delete() # Remove all races
+#     DB.session.commit()
+#     server_log('Saved rounds cleared')
 
-@SOCKET_IO.on('reset_pilots')
-def on_reset_heats():
-    '''Resets default pilots for nodes detected.'''
-    server_log('Resetting to default pilots')
-    DB.session.query(Pilot).delete() # Remove all pilots
-    DB.session.commit()
-    DB.session.add(Pilot(pilot_id='0', callsign='-', name='-'))
-    for node in range(RACE.num_nodes): # Add back heat 1 with pilots 1 thru 5
-        DB.session.add(Pilot(pilot_id=node+1, callsign='callsign{0}'.format(node+1), \
-            name='Pilot Name'))
-    DB.session.commit()
+# @SOCKET_IO.on('reset_heats')
+# def on_reset_heats():
+#     '''Resets to one heat with default pilots.'''
+#     DB.session.query(Heat).delete() # Remove all heats
+#     DB.session.commit()
+#     for node in range(RACE.num_nodes): # Add back heat 1 with pilots 1 thru 5
+#         DB.session.add(Heat(heat_id=1, node_index=node, pilot_id=node+1))
+#     DB.session.commit()
+#     server_log('Heats reset to default')
+
+# @SOCKET_IO.on('reset_pilots')
+# def on_reset_heats():
+#     '''Resets default pilots for nodes detected.'''
+    
+#     DB.session.query(Pilot).delete() # Remove all pilots
+#     DB.session.commit()
+#     DB.session.add(Pilot(pilot_id='0', callsign='-', name='-'))
+#     for node in range(RACE.num_nodes): # Add back heat 1 with pilots 1 thru 5
+#         DB.session.add(Pilot(pilot_id=node+1, callsign='callsign{0}'.format(node+1), \
+#             name='Pilot Name'))
+#     DB.session.commit()
+#     server_log('Pilots reset to default')
 
 # Race management socket io events
 
@@ -258,89 +272,88 @@ def on_start_race_2min():
 
 def start_race():
     '''Common race start events.'''
-    on_clear_laps() # Also clear the current laps
-    emit_current_laps() # Sends out the blank laps to update the webpage
-    emit_leaderboard()
-    INTERFACE.enable_calibration_mode() # Prep nodes to reset triggers on next pass
+    on_clear_laps() # Ensure laps are cleared before race start, shouldn't be needed
+    emit_current_laps() # Race page, blank laps to the web client
+    emit_leaderboard() # Race page, blank leaderboard to the web client
+    INTERFACE.enable_calibration_mode() # Nodes reset triggers on next pass
     gevent.sleep(0.500) # Make this random 2 to 5 seconds
     RACE.race_status = 1 # To enable registering passed laps
     RACE_START = datetime.now() # Update the race start time stamp
     server_log('Race started at {0}'.format(RACE_START))
-    emit_node_data() # To see the values on the start line
+    emit_node_data() # Settings page, node channel and triggers on the launch pads
     emit_race_status() # Race page, to set race button states
 
 @SOCKET_IO.on('stop_race')
 def on_race_status():
-    '''Stops the racing and stops looking for laps.'''
-    server_log('Race stopped')
+    '''Stops the race and stops registering laps.'''
     RACE.race_status = 2 # To stop registering passed laps, waiting for laps to be cleared
-    emit_race_status() # Race page, to set race button states
     SOCKET_IO.emit('stop_timer') # Loop back to race page to start the timer counting up
+    server_log('Race stopped')
+    emit_race_status() # Race page, to set race button states
 
 @SOCKET_IO.on('save_laps')
 def on_save_laps():
-    '''Save current laps to the database and clear the current laps.'''
+    '''Save current laps data to the database.'''
     # Get the last saved round for the current heat
-    server_log('Saving current laps to database')
     max_round = DB.session.query(DB.func.max(SavedRace.round_id)) \
             .filter_by(heat_id=RACE.current_heat).scalar()
-    print max_round
     if max_round is None:
         max_round = 0
-
+    # Loop through laps to copy to saved races
     for node in range(RACE.num_nodes):
         for lap in CurrentLap.query.filter_by(node_index=node).all():
             DB.session.add(SavedRace(round_id=max_round+1, heat_id=RACE.current_heat, \
                 node_index=node, pilot_id=lap.pilot_id, lap_id=lap.lap_id, \
-                lap_time_stamp=lap.lap_time_stamp, lap_time=lap.lap_time))
+                lap_time_stamp=lap.lap_time_stamp, lap_time=lap.lap_time, \
+                lap_time_formatted=lap.lap_time_formatted))
     DB.session.commit()
+    server_log('Current laps saved: Heat {0} Round {1}'.format(RACE.current_heat, max_round+1))
     on_clear_laps() # Also clear the current laps
 
 @SOCKET_IO.on('clear_laps')
 def on_clear_laps():
     '''Clear the current laps due to false start or practice.'''
-    server_log('Clearing current laps from the database')
     RACE.race_status = 0 # Laps cleared, ready to start next race
     DB.session.query(CurrentLap).delete() # Clear out the current laps table
     DB.session.commit()
-    emit_current_laps()
-    emit_leaderboard()
+    server_log('Current laps cleared')
+    emit_current_laps() # Race page, blank laps to the web client
+    emit_leaderboard() # Race page, blank leaderboard to the web client
     emit_race_status() # Race page, to set race button states
 
 @SOCKET_IO.on('set_current_heat')
 def on_set_current_heat(data):
     '''Update the current heat variable.'''
     new_heat_id = data['heat']
-    server_log('Set current heat: Heat {0}'.format(new_heat_id))
     RACE.current_heat = new_heat_id
-    emit_current_heat()
-    emit_race_status() # Race page, to set race button states
+    server_log('Current heat set: Heat {0}'.format(new_heat_id))
+    emit_current_heat() # Race page, to update heat selection button
 
 @SOCKET_IO.on('delete_lap')
 def on_delete_lap(data):
     '''Delete a false lap.'''
     node_index = data['node']
     lap_id = data['lapid']
-    server_log('Delete lap: Node {0} Lap {1}'.format(node_index, lap_id))
     # Update the lap_time for the lap after
     previous_lap = CurrentLap.query.filter_by(node_index=node_index, lap_id=lap_id-1).first()
     next_lap = CurrentLap.query.filter_by(node_index=node_index, lap_id=lap_id+1).first()
     next_lap.lap_time = next_lap.lap_time_stamp - previous_lap.lap_time_stamp
+    next_lap.lap_time_formatted = time_format(next_lap.lap_time)
     # Delete the false lap
     CurrentLap.query.filter_by(node_index=node_index, lap_id=lap_id).delete()
     # Update lap numbers
     for lap in CurrentLap.query.filter_by(node_index=node_index).all():
         if lap.lap_id > lap_id:
             lap.lap_id = lap.lap_id - 1
-
     DB.session.commit()
-    emit_current_laps()
-    emit_leaderboard()
+    server_log('Lap deleted: Node {0} Lap {1}'.format(node_index, lap_id))
+    emit_current_laps() # Race page, update web client
+    emit_leaderboard() # Race page, update web client
 
 # Socket io emit functions
 
 def emit_race_status():
-    '''Emits race_status data.'''
+    '''Emits race status.'''
     SOCKET_IO.emit('race_status', {'race_status': RACE.race_status})
 
 def emit_node_data():
@@ -354,7 +367,7 @@ def emit_node_data():
     })
 
 def emit_current_laps():
-    '''Emits current_laps json.'''
+    '''Emits current laps.'''
     current_laps = []
     # for node in DB.session.query(CurrentLap.node_index).distinct():
     for node in range(RACE.num_nodes):
@@ -362,13 +375,13 @@ def emit_current_laps():
         node_lap_times = []
         for lap in CurrentLap.query.filter_by(node_index=node).all():
             node_laps.append(lap.lap_id)
-            node_lap_times.append(time_format(lap.lap_time))
+            node_lap_times.append(lap.lap_time_formatted)
         current_laps.append({'lap_id': node_laps, 'lap_time': node_lap_times})
     current_laps = {'node_index': current_laps}
     SOCKET_IO.emit('current_laps', current_laps)
 
 def emit_leaderboard():
-    '''Emits leaderboard json.'''
+    '''Emits leaderboard.'''
     # Get the max laps for each pilot
     max_laps = []
     for node in range(RACE.num_nodes):
@@ -377,8 +390,6 @@ def emit_leaderboard():
         if max_lap is None:
             max_lap = 0
         max_laps.append(max_lap)
-    # print max_laps
-
     # Get the total race time for each pilot
     total_time = []
     for node in range(RACE.num_nodes):
@@ -387,8 +398,6 @@ def emit_leaderboard():
         else:
             total_time.append(CurrentLap.query.filter_by(node_index=node, \
                 lap_id=max_laps[node]).first().lap_time_stamp)
-    # print total_time
-
     # Get the last lap for each pilot
     last_lap = []
     for node in range(RACE.num_nodes):
@@ -397,8 +406,6 @@ def emit_leaderboard():
         else:
             last_lap.append(CurrentLap.query.filter_by(node_index=node, \
                 lap_id=max_laps[node]).first().lap_time)
-    # print last_lap
-
     # Get the average lap time for each pilot
     average_lap = []
     for node in range(RACE.num_nodes):
@@ -408,8 +415,6 @@ def emit_leaderboard():
             avg_lap = DB.session.query(DB.func.avg(CurrentLap.lap_time)) \
             .filter_by(node_index=node).scalar()
             average_lap.append(avg_lap)
-    # print average_lap
-
     # Get the fastest lap time for each pilot
     fastest_lap = []
     for node in range(RACE.num_nodes):
@@ -419,32 +424,16 @@ def emit_leaderboard():
             fast_lap = DB.session.query(DB.func.min(CurrentLap.lap_time)) \
             .filter_by(node_index=node).scalar()
             fastest_lap.append(fast_lap)
-    # print fastest_lap
-
-    # Get the nodes for tracking sorts
-    # nodes = []
-    # for node in range(RACE.num_nodes):
-    #     nodes.append(node)
-
     # Get the pilot callsigns to add to sort
     callsigns = []
     for node in range(RACE.num_nodes):
         pilot_id = Heat.query.filter_by( \
             heat_id=RACE.current_heat, node_index=node).first().pilot_id
         callsigns.append(Pilot.query.filter_by(pilot_id=pilot_id).first().callsign)
-    # print callsigns
-
     # Combine for sorting
     leaderboard = zip(callsigns, max_laps, total_time, last_lap, average_lap, fastest_lap)
-    # print leaderboard
-
     leaderboard_sorted = sorted(sorted(leaderboard, key=lambda x: x[0]), reverse=True, \
         key=lambda x: x[1])
-    # print leaderboard_sorted
-
-    # print ' '
-    # print leaderboard_sorted[0]
-    # print leaderboard_sorted[0][0]
 
     SOCKET_IO.emit('leaderboard', {
         'position': [i+1 for i in range(RACE.num_nodes)],
@@ -458,7 +447,7 @@ def emit_leaderboard():
     })
 
 def emit_heat_data():
-    '''Emits heat_data json.'''
+    '''Emits heat data.'''
     current_heats = []
     for heat in Heat.query.with_entities(Heat.heat_id).distinct():
         pilots = []
@@ -470,14 +459,14 @@ def emit_heat_data():
     SOCKET_IO.emit('heat_data', current_heats)
 
 def emit_pilot_data():
-    '''Emits pilot_data json.'''
+    '''Emits pilot data.'''
     SOCKET_IO.emit('pilot_data', {
         'callsign': [pilot.callsign for pilot in Pilot.query.all()],
         'name': [pilot.name for pilot in Pilot.query.all()]
     })
 
 def emit_current_heat():
-    '''Emits current_heat json.'''
+    '''Emits the current heat.'''
     callsigns = []
     for node in range(RACE.num_nodes):
         pilot_id = Heat.query.filter_by( \
@@ -494,7 +483,7 @@ def emit_current_heat():
 #
 
 def heartbeat_thread_function():
-    '''Emits 'heartbeat' with json node data.'''
+    '''Emits current rssi data.'''
     while True:
         SOCKET_IO.emit('heartbeat', INTERFACE.get_heartbeat_json())
         gevent.sleep(0.500)
@@ -540,12 +529,11 @@ def pass_record_callback(node, ms_since_lap):
         last_lap_id = DB.session.query(DB.func.max(CurrentLap.lap_id)) \
             .filter_by(node_index=node.index).scalar()
 
-        # Instead of lap_id query the database for an existing lap zero
-        if last_lap_id is None: # If no laps this is the first pass
+        if last_lap_id is None: # No previous laps, this is the first pass
             # Lap zero represents the time from the launch pad to flying through the gate
             lap_time = lap_time_stamp
             lap_id = 0
-        else: # Else this is a normal completed lap
+        else: # This is a normal completed lap
             # Find the time stamp of the last lap completed
             last_lap_time_stamp = CurrentLap.query.filter_by( \
                 node_index=node.index, lap_id=last_lap_id).first().lap_time_stamp
@@ -555,7 +543,8 @@ def pass_record_callback(node, ms_since_lap):
 
         # Add the new lap to the database
         DB.session.add(CurrentLap(node_index=node.index, pilot_id=pilot_id, lap_id=lap_id, \
-            lap_time_stamp=lap_time_stamp, lap_time=lap_time))
+            lap_time_stamp=lap_time_stamp, lap_time=lap_time, \
+            lap_time_formatted=time_format(lap_time)))
         DB.session.commit()
 
         server_log('Pass record: Node: {0}, Lap: {1}, Lap time: {2}' \
@@ -595,27 +584,27 @@ def db_init():
 
     print 'Start database initialization'
 
-    DB.create_all()
+    DB.create_all() # Creates tables from database classes/models
 
     # Create default pilots list
     DB.session.query(Pilot).delete()
-    DB.session.commit()
+
     DB.session.add(Pilot(pilot_id='0', callsign='-', name='-'))
     for node in range(RACE.num_nodes):
         DB.session.add(Pilot(pilot_id=node+1, callsign='callsign{0}'.format(node+1), \
             name='Pilot Name'))
-    DB.session.commit()
+
 
     # Create default heat 1
     DB.session.query(Heat).delete()
-    DB.session.commit()
+
     for node in range(RACE.num_nodes):
         DB.session.add(Heat(heat_id=1, node_index=node, pilot_id=node+1))
-    DB.session.commit()
+
 
     # Add frequencies
     DB.session.query(Frequency).delete()
-    DB.session.commit()
+
     # IMD Channels
     DB.session.add(Frequency(band='IMD', channel='E2', frequency='5685'))
     DB.session.add(Frequency(band='IMD', channel='F2', frequency='5760'))
@@ -623,7 +612,7 @@ def db_init():
     DB.session.add(Frequency(band='IMD', channel='F7', frequency='5860'))
     DB.session.add(Frequency(band='IMD', channel='E6', frequency='5905'))
     DB.session.add(Frequency(band='IMD', channel='E4', frequency='5645'))
-    # Raceband
+    # Band C - Raceband
     DB.session.add(Frequency(band='C', channel='C1', frequency='5658'))
     DB.session.add(Frequency(band='C', channel='C2', frequency='5695'))
     DB.session.add(Frequency(band='C', channel='C3', frequency='5732'))
@@ -632,42 +621,51 @@ def db_init():
     DB.session.add(Frequency(band='C', channel='C6', frequency='5843'))
     DB.session.add(Frequency(band='C', channel='C7', frequency='5880'))
     DB.session.add(Frequency(band='C', channel='C8', frequency='5917'))
-    # Fatshark
-    # DB.session.add(Frequency(band='F', channel='F1', frequency='5740'))
-    # DB.session.add(Frequency(band='F', channel='F2', frequency='5760'))
-    # DB.session.add(Frequency(band='F', channel='F3', frequency='5780'))
-    # DB.session.add(Frequency(band='F', channel='F4', frequency='5800'))
-    # DB.session.add(Frequency(band='F', channel='F5', frequency='5820'))
-    # DB.session.add(Frequency(band='F', channel='F6', frequency='5840'))
-    # DB.session.add(Frequency(band='F', channel='F7', frequency='5860'))
-    # DB.session.add(Frequency(band='F', channel='F8', frequency='5880'))
+    # Band F - ImmersionRC, Iftron
+    DB.session.add(Frequency(band='F', channel='F1', frequency='5740'))
+    DB.session.add(Frequency(band='F', channel='F2', frequency='5760'))
+    DB.session.add(Frequency(band='F', channel='F3', frequency='5780'))
+    DB.session.add(Frequency(band='F', channel='F4', frequency='5800'))
+    DB.session.add(Frequency(band='F', channel='F5', frequency='5820'))
+    DB.session.add(Frequency(band='F', channel='F6', frequency='5840'))
+    DB.session.add(Frequency(band='F', channel='F7', frequency='5860'))
+    DB.session.add(Frequency(band='F', channel='F8', frequency='5880'))
+    # Band E - HobbyKing, Foxtech
+    DB.session.add(Frequency(band='E', channel='E1', frequency='5705'))
+    DB.session.add(Frequency(band='E', channel='E2', frequency='5685'))
+    DB.session.add(Frequency(band='E', channel='E3', frequency='5665'))
+    DB.session.add(Frequency(band='E', channel='E4', frequency='5645'))
+    DB.session.add(Frequency(band='E', channel='E5', frequency='5885'))
+    DB.session.add(Frequency(band='E', channel='E6', frequency='5905'))
+    DB.session.add(Frequency(band='E', channel='E7', frequency='5925'))
+    DB.session.add(Frequency(band='E', channel='E8', frequency='5945'))
+    # Band B - FlyCamOne Europe
+    DB.session.add(Frequency(band='B', channel='B1', frequency='5733'))
+    DB.session.add(Frequency(band='B', channel='B2', frequency='5752'))
+    DB.session.add(Frequency(band='B', channel='B3', frequency='5771'))
+    DB.session.add(Frequency(band='B', channel='B4', frequency='5790'))
+    DB.session.add(Frequency(band='B', channel='B5', frequency='5809'))
+    DB.session.add(Frequency(band='B', channel='B6', frequency='5828'))
+    DB.session.add(Frequency(band='B', channel='B7', frequency='5847'))
+    DB.session.add(Frequency(band='B', channel='B8', frequency='5866'))
+    # Band A - Team BlackSheep, RangeVideo, SpyHawk, FlyCamOne USA
+    DB.session.add(Frequency(band='A', channel='A1', frequency='5865'))
+    DB.session.add(Frequency(band='A', channel='A2', frequency='5845'))
+    DB.session.add(Frequency(band='A', channel='A3', frequency='5825'))
+    DB.session.add(Frequency(band='A', channel='A4', frequency='5805'))
+    DB.session.add(Frequency(band='A', channel='A5', frequency='5785'))
+    DB.session.add(Frequency(band='A', channel='A6', frequency='5765'))
+    DB.session.add(Frequency(band='A', channel='A7', frequency='5745'))
+    DB.session.add(Frequency(band='A', channel='A8', frequency='5725'))
 
-    # DB.session.add(Frequency(band='E', channel='E1', frequency='5705'))
-    # DB.session.add(Frequency(band='E', channel='E2', frequency='5685'))
-    # DB.session.add(Frequency(band='E', channel='E3', frequency='5665'))
-    # DB.session.add(Frequency(band='E', channel='E4', frequency='5645'))
-    # DB.session.add(Frequency(band='E', channel='E5', frequency='5885'))
-    # DB.session.add(Frequency(band='E', channel='E6', frequency='5905'))
-    # DB.session.add(Frequency(band='E', channel='E7', frequency='5925'))
-    # DB.session.add(Frequency(band='E', channel='E8', frequency='5945'))
 
-    # DB.session.add(Frequency(band='B', channel='B1', frequency='5733'))
-    # DB.session.add(Frequency(band='B', channel='B2', frequency='5752'))
-    # DB.session.add(Frequency(band='B', channel='B3', frequency='5771'))
-    # DB.session.add(Frequency(band='B', channel='B4', frequency='5790'))
-    # DB.session.add(Frequency(band='B', channel='B5', frequency='5809'))
-    # DB.session.add(Frequency(band='B', channel='B6', frequency='5828'))
-    # DB.session.add(Frequency(band='B', channel='B7', frequency='5847'))
-    # DB.session.add(Frequency(band='B', channel='B8', frequency='5866'))
 
-    # DB.session.add(Frequency(band='A', channel='A1', frequency='5865'))
-    # DB.session.add(Frequency(band='A', channel='A2', frequency='5845'))
-    # DB.session.add(Frequency(band='A', channel='A3', frequency='5825'))
-    # DB.session.add(Frequency(band='A', channel='A4', frequency='5805'))
-    # DB.session.add(Frequency(band='A', channel='A5', frequency='5785'))
-    # DB.session.add(Frequency(band='A', channel='A6', frequency='5765'))
-    # DB.session.add(Frequency(band='A', channel='A7', frequency='5745'))
-    # DB.session.add(Frequency(band='A', channel='A8', frequency='5725'))
+    # Delete any current laps
+    DB.session.query(CurrentLap).delete()
+
+
+    # Delete any saved races
+    DB.session.query(SavedRace).delete()
 
     DB.session.commit()
 
@@ -679,23 +677,25 @@ RACE.num_nodes = len(INTERFACE.nodes)
 print 'Number of nodes found: {0}'.format(RACE.num_nodes)
 
 gevent.sleep(0.500) # Delay to get I2C addresses
-default_frequencies()
+default_frequencies() # Set default frequencies based on number of nodes
 
 INTERFACE.set_calibration_threshold_global(80)
 
-# db_init() # Run database initialization function, run once then comment out
+# Run database initialization function, run once then comment out
+# db_init()
 
-DB.session.query(CurrentLap).delete() # Clear any current laps
-DB.session.commit() # These DB session commands prevent 'application context' errors in pass record
+# Clear any current laps from the database on each program start
+DB.session.query(CurrentLap).delete() 
+DB.session.commit() # DB session commit here needed to prevent 'application context' errors
 
-# Test data
-DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=0, lap_time_stamp=5000, lap_time=5000))
-DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=1, lap_time_stamp=15000, lap_time=10000))
-DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=2, lap_time_stamp=30000, lap_time=15000))
-DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=0, lap_time_stamp=6000, lap_time=6000))
-DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=1, lap_time_stamp=15000, lap_time=9000))
-DB.session.add(CurrentLap(node_index=1, pilot_id=1, lap_id=0, lap_time_stamp=5000, lap_time=5000))
-DB.session.add(CurrentLap(node_index=1, pilot_id=1, lap_id=1, lap_time_stamp=14000, lap_time=9000))
+# Test data - Current laps
+DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=0, lap_time_stamp=5000, lap_time=5000, lap_time_formatted=time_format(5000)))
+DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=1, lap_time_stamp=15000, lap_time=10000, lap_time_formatted=time_format(10000)))
+DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=2, lap_time_stamp=30000, lap_time=15000, lap_time_formatted=time_format(15000)))
+DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=0, lap_time_stamp=6000, lap_time=6000, lap_time_formatted=time_format(6000)))
+DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=1, lap_time_stamp=15000, lap_time=9000, lap_time_formatted=time_format(9000)))
+DB.session.add(CurrentLap(node_index=1, pilot_id=1, lap_id=0, lap_time_stamp=5000, lap_time=5000, lap_time_formatted=time_format(5000)))
+DB.session.add(CurrentLap(node_index=1, pilot_id=1, lap_id=1, lap_time_stamp=14000, lap_time=9000, lap_time_formatted=time_format(9000)))
 DB.session.commit()
 
 emit_leaderboard()

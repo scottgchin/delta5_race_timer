@@ -1,3 +1,4 @@
+{% extends "layout.html" %} {% block title %}Database{% endblock %} {% block content %}
 <h3>Pilots</h3>
 <table class="table">
     <thead>
@@ -52,6 +53,7 @@
             <th>Lap ID</th>
             <th>Lap Time Stamp</th>
             <th>Lap Time</th>
+            <th>Lap Time Formatted</th>
         </tr>
     </thead>
     <tbody>
@@ -63,6 +65,7 @@
             <td>{{ currentlap.lap_id }}</td>
             <td>{{ currentlap.lap_time_stamp }}</td>
             <td>{{ currentlap.lap_time }}</td>
+            <td>{{ currentlap.lap_time_formatted }}</td>
         </tr>
         {% endfor %}
     </tbody>
@@ -77,6 +80,7 @@
             <th>Heat ID</th>
             <th>Pilot ID</th>
             <th>Lap Time</th>
+            <th>Lap Time Formatted</th>
         </tr>
     </thead>
     <tbody>
@@ -87,6 +91,7 @@
             <td>{{ savedrace.heat_id }}</td>
             <td>{{ savedrace.pilot_id }}</td>
             <td>{{ savedrace.lap_time }}</td>
+            <td>{{ savedrace.lap_time_formatted }}</td>
         </tr>
         {% endfor %}
     </tbody>
@@ -113,3 +118,5 @@
         {% endfor %}
     </tbody>
 </table>
+
+{% endblock %}
