@@ -4,48 +4,23 @@
 1. Follow the instructions here if not done already: [/doc/Hardware and Software Setup Instructions.md](Hardware%20and%20Software%20Setup%20Instructions.md)
 
 ### Database Setup and Configure
-1. Open a browser and type in the ip address of the timing system on your network.
+1. Open a browser and type in the ip address of the timing system on your network using port 5000
+```
+XXX.XXX.XXX.XXX:5000/
+```
 
-2. Go to the 'Database' page.
+2. Go to the 'Settings' page
 
-3. Click the 'Create Database' button at the bottom, this adds all the tables in the 'vtx' database.
-
-4. Enter the number of nodes installed in the system and then click 'Initialize System'.
-
-### Set Triggers
-
-1. Go to the 'Settings' page.
-
-2. Click 'Start System' to start polling data from the nodes.
-
-3. Power a drone and place it 10 feet from the timer.
-
-4. Note that the rssi value for the node on that frequency has increased.
-
-5. Click the 'Set' button for that node to save the current 'rssi' reading as the trigger value.
-
-6. Move the drone to within 5 feet of the timer.
-
-7. Ensure that the current 'rssi' reading from the node is at least 15 points more than the tigger value.
-
-8. The trigger function works by looking for a value 10 points more than the trigger value and then counts a lap when the rssi falls below 10 points less than the trigger value.
-
-9. Repeat this process for each channel/drone.
+3. Click the 'Reset Database' button at the bottom
 
 ### Running Races
 
-1. With 'System Status' as 'Running' on the settings page, go to the 'Race' page.
+1. Go to the 'Race' page
 
-2. Move all drones 10 plus feet away from the timing system, the rssi values must be 10 points less than the trigger value.
+2. Select the heat for this race
 
-3. Click 'Start Race'
+3. Click 'Start Race' for a count up timer and 'Start Race 2min' for a count down timer
 
-4. Give the nodes 5 seconds to initialize and then tell the pilots to start racing.
+6. When the race is complete, click 'Stop Race'
 
-5. The first pass through the gate won't show anything but when a pilot comes through the gate a second time it will register that as the first lap.
-
-6. When the race is completed click 'Stop Race'
-
-7. Click 'Save Laps' to store the results of a good race.
-
-8. Click 'Clear Laps' and then go back to step 2 to run another race.
+7. Click 'Save Laps' to store the results of a good race or 'Clear Laps' for a false start or as needed
