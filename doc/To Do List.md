@@ -1,4 +1,5 @@
 ### Known Issues
+* None
 
 ### To Do - Short Term
 * Add group and pilot notes for the race director
