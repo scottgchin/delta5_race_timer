@@ -17,6 +17,12 @@
 			}
 		});
 
+		socket.on('node_tuning', function (msg) {
+			$('.set_calibration_threshold').attr('value', msg.calibration_threshold);
+			$('.set_calibration_offset').attr('value', msg.calibration_offset);
+			$('.set_trigger_threshold').attr('value', msg.trigger_threshold);
+		});
+
 		socket.on('heat_data', function (msg) {
 			$.each(msg.heat_id, function (i, heat_id) {
 				$.each(heat_id.callsign, function (j, callsign) {
@@ -50,7 +56,6 @@
 		})
 
 		$('.set_pilot_callsign').change(function (event) {
-
 			var data = {
 				pilot_id: parseInt($(this).data('pilot_id')),
 				callsign: $(this).val()
@@ -59,12 +64,32 @@
 		})
 
 		$('.set_pilot_name').change(function (event) {
-
 			var data = {
 				pilot_id: parseInt($(this).data('pilot_id')),
 				name: $(this).val()
 			};
 			socket.emit('set_pilot_name', data);
+		})
+
+		$('.set_calibration_threshold').change(function (event) {
+			var data = {
+				calibration_threshold: parseInt($(this).val())
+			};
+			socket.emit('set_calibration_threshold', data);
+		})
+
+		$('.set_calibration_offset').change(function (event) {
+			var data = {
+				calibration_offset: parseInt($(this).val())
+			};
+			socket.emit('set_calibration_offset', data);
+		})
+
+		$('.set_trigger_threshold').change(function (event) {
+			var data = {
+				trigger_threshold: parseInt($(this).val())
+			};
+			socket.emit('set_trigger_threshold', data);
 		})
 
 		$('button#add_heat').click(function (event) {
@@ -87,6 +112,7 @@
 
 		$('button#reset_database').click(function (event) {
 			socket.emit('reset_database');
+			window.location.href = "/settings"; // Update to not need page reload
 			return false;
 		});
 	});
@@ -114,7 +140,11 @@
 <p>Spelling corrections only after saving races.</p>
 {% include "build_pilots_edit.html" %}
 
-<!--Clear saved rounds, reset heats, reset pilots-->
+<!--Edit system tuning values-->
+<h4>Sensor Tuning</h4>
+{% include "build_node_tuning.html" %}
+
+<!--Reset database-->
 <h4>Database (Copy out your saved races first)</h4>
 <!--Look into the consequences of clearing the heat or pilots with many race rounds saved that reference deleted pilots-->
 <div>

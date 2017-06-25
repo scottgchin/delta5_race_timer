@@ -148,6 +148,7 @@ def connect_handler():
         HEARTBEAT_THREAD = gevent.spawn(heartbeat_thread_function)
         server_log('Heartbeat thread started')
     emit_node_data() # Settings page, node channel and triggers
+    emit_node_tuning() # Settings page, node tuning values
     emit_race_status() # Race page, to set race button states
     emit_current_laps() # Race page, load and current laps
     emit_leaderboard() # Race page, load leaderboard for current laps
@@ -183,7 +184,7 @@ def on_set_pilot_position(data):
     heat = data['heat']
     node_index = data['node']
     pilot = data['pilot']
-    db_update = Heat.query.filter_by(heat_id=heat, node_index=node).first()
+    db_update = Heat.query.filter_by(heat_id=heat, node_index=node_index).first()
     db_update.pilot_id = pilot
     DB.session.commit()
     server_log('Pilot position set: Heat {0} Node {1} Pilot {2}'.format(heat, node_index+1, pilot))
@@ -208,6 +209,7 @@ def on_set_pilot_callsign(data):
     DB.session.commit()
     server_log('Pilot callsign set: Pilot {0} Callsign {1}'.format(pilot_id, callsign))
     emit_pilot_data() # Settings page, new pilot callsign
+    emit_heat_data() # Settings page, new pilot callsign in heats
 
 @SOCKET_IO.on('set_pilot_name')
 def on_set_pilot_name(data):
@@ -219,6 +221,30 @@ def on_set_pilot_name(data):
     DB.session.commit()
     server_log('Pilot name set: Pilot {0} Name {1}'.format(pilot_id, name))
     emit_pilot_data() # Settings page, new pilot name
+
+@SOCKET_IO.on('set_calibration_threshold')
+def on_set_calibration_threshold(data):
+    '''Set Calibration Threshold.'''
+    calibration_threshold = data['calibration_threshold']
+    INTERFACE.set_calibration_threshold_global(calibration_threshold)
+    server_log('Calibration threshold set: {0}'.format(calibration_threshold))
+    emit_node_tuning()
+
+@SOCKET_IO.on('set_calibration_offset')
+def on_set_calibration_offset(data):
+    '''Set Calibration Offset.'''
+    calibration_offset = data['calibration_offset']
+    INTERFACE.set_calibration_offset_global(calibration_offset)
+    server_log('Calibration offset set: {0}'.format(calibration_offset))
+    emit_node_tuning()
+
+@SOCKET_IO.on('set_trigger_threshold')
+def on_set_trigger_threshold(data):
+    '''Set Trigger Threshold.'''
+    trigger_threshold = data['trigger_threshold']
+    INTERFACE.set_trigger_threshold_global(trigger_threshold)
+    server_log('Trigger threshold set: {0}'.format(trigger_threshold))
+    emit_node_tuning()
 
 @SOCKET_IO.on('reset_database')
 def on_reset_database():
@@ -278,6 +304,7 @@ def start_race():
     INTERFACE.enable_calibration_mode() # Nodes reset triggers on next pass
     gevent.sleep(0.500) # Make this random 2 to 5 seconds
     RACE.race_status = 1 # To enable registering passed laps
+    global RACE_START # To redefine main program variable
     RACE_START = datetime.now() # Update the race start time stamp
     server_log('Race started at {0}'.format(RACE_START))
     emit_node_data() # Settings page, node channel and triggers on the launch pads
@@ -328,6 +355,7 @@ def on_set_current_heat(data):
     RACE.current_heat = new_heat_id
     server_log('Current heat set: Heat {0}'.format(new_heat_id))
     emit_current_heat() # Race page, to update heat selection button
+    emit_leaderboard() # Race page, to update callsigns in leaderboard
 
 @SOCKET_IO.on('delete_lap')
 def on_delete_lap(data):
@@ -366,6 +394,17 @@ def emit_node_data():
         'peak_rssi': [node.peak_rssi for node in INTERFACE.nodes]
     })
 
+def emit_node_tuning():
+    '''Emits node tuning values.'''
+    SOCKET_IO.emit('node_tuning', {
+        'calibration_threshold': \
+            INTERFACE.get_calibration_threshold_json()['calibration_threshold'],
+        'calibration_offset': \
+            INTERFACE.get_calibration_offset_json()['calibration_offset'],
+        'trigger_threshold': \
+            INTERFACE.get_trigger_threshold_json()['trigger_threshold']
+    })
+
 def emit_current_laps():
     '''Emits current laps.'''
     current_laps = []
@@ -394,7 +433,7 @@ def emit_leaderboard():
     total_time = []
     for node in range(RACE.num_nodes):
         if max_laps[node] is 0:
-            total_time.append(0)
+            total_time.append(0) # Add zero if no laps completed
         else:
             total_time.append(CurrentLap.query.filter_by(node_index=node, \
                 lap_id=max_laps[node]).first().lap_time_stamp)
@@ -402,7 +441,7 @@ def emit_leaderboard():
     last_lap = []
     for node in range(RACE.num_nodes):
         if max_laps[node] is 0:
-            last_lap.append(0)
+            last_lap.append(0) # Add zero if no laps completed
         else:
             last_lap.append(CurrentLap.query.filter_by(node_index=node, \
                 lap_id=max_laps[node]).first().lap_time)
@@ -410,19 +449,23 @@ def emit_leaderboard():
     average_lap = []
     for node in range(RACE.num_nodes):
         if max_laps[node] is 0:
-            average_lap.append(0)
+            average_lap.append(0) # Add zero if no laps completed
         else:
+            # avg_lap = DB.session.query(DB.func.avg(CurrentLap.lap_time)) \
+            # .filter_by(node_index=node).scalar()
             avg_lap = DB.session.query(DB.func.avg(CurrentLap.lap_time)) \
-            .filter_by(node_index=node).scalar()
+            .filter(CurrentLap.node_index == node, CurrentLap.lap_id != 0).scalar()
             average_lap.append(avg_lap)
     # Get the fastest lap time for each pilot
     fastest_lap = []
     for node in range(RACE.num_nodes):
         if max_laps[node] is 0:
-            fastest_lap.append(0)
+            fastest_lap.append(0) # Add zero if no laps completed
         else:
+            # fast_lap = DB.session.query(DB.func.min(CurrentLap.lap_time)) \
+            # .filter_by(node_index=node).scalar()
             fast_lap = DB.session.query(DB.func.min(CurrentLap.lap_time)) \
-            .filter_by(node_index=node).scalar()
+            .filter(CurrentLap.node_index == node, CurrentLap.lap_id != 0).scalar()
             fastest_lap.append(fast_lap)
     # Get the pilot callsigns to add to sort
     callsigns = []
@@ -439,6 +482,7 @@ def emit_leaderboard():
         'position': [i+1 for i in range(RACE.num_nodes)],
         'callsign': [leaderboard_sorted[i][0] for i in range(RACE.num_nodes)],
         'laps': [leaderboard_sorted[i][1] for i in range(RACE.num_nodes)],
+        'total_time': [time_format(leaderboard_sorted[i][2]) for i in range(RACE.num_nodes)],
         'last_lap': [time_format(leaderboard_sorted[i][3]) for i in range(RACE.num_nodes)],
         'behind': [(leaderboard_sorted[0][1] - leaderboard_sorted[i][1]) \
             for i in range(RACE.num_nodes)],
@@ -513,7 +557,7 @@ def time_format(millis):
     return '{0:02d}:{1:02d}.{2:03d}'.format(minutes, seconds, milliseconds)
 
 def pass_record_callback(node, ms_since_lap):
-    '''Logs and emits a completed lap.'''
+    '''Handles pass records from the nodes.'''
     server_log('Raw pass record: Node: {0}, MS Since Lap: {1}'.format(node.index, ms_since_lap))
     emit_node_data() # For updated triggers and peaks
 
@@ -567,8 +611,7 @@ def hardware_log_callback(message):
 INTERFACE.hardware_log_callback = hardware_log_callback
 
 def default_frequencies():
-    '''Set each nodes frequency, use imd frequncies for 6 or less and race band for 7 or 8'''
-    server_log('Setting default frequencies')
+    '''Set node frequencies, IMD for 6 or less and race band for 7 or 8.'''
     frequencies_imd_5_6 = [5685, 5760, 5800, 5860, 5905, 5645]
     frequencies_raceband = [5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917]
     for index, node in enumerate(INTERFACE.nodes):
@@ -577,34 +620,29 @@ def default_frequencies():
             INTERFACE.set_frequency(index, frequencies_imd_5_6[index])
         else:
             INTERFACE.set_frequency(index, frequencies_raceband[index])
+    server_log('Default frequencies set')
 
 # How to move this to a seperate file?
 def db_init():
     '''Initialize database.'''
 
     print 'Start database initialization'
-
     DB.create_all() # Creates tables from database classes/models
 
     # Create default pilots list
     DB.session.query(Pilot).delete()
-
     DB.session.add(Pilot(pilot_id='0', callsign='-', name='-'))
     for node in range(RACE.num_nodes):
         DB.session.add(Pilot(pilot_id=node+1, callsign='callsign{0}'.format(node+1), \
             name='Pilot Name'))
 
-
     # Create default heat 1
     DB.session.query(Heat).delete()
-
     for node in range(RACE.num_nodes):
         DB.session.add(Heat(heat_id=1, node_index=node, pilot_id=node+1))
 
-
     # Add frequencies
     DB.session.query(Frequency).delete()
-
     # IMD Channels
     DB.session.add(Frequency(band='IMD', channel='E2', frequency='5685'))
     DB.session.add(Frequency(band='IMD', channel='F2', frequency='5760'))
@@ -658,47 +696,45 @@ def db_init():
     DB.session.add(Frequency(band='A', channel='A7', frequency='5745'))
     DB.session.add(Frequency(band='A', channel='A8', frequency='5725'))
 
-
-
     # Delete any current laps
     DB.session.query(CurrentLap).delete()
-
-
     # Delete any saved races
     DB.session.query(SavedRace).delete()
-
+    # Commit all updates
     DB.session.commit()
+
+    print 'Database initialized'
 
 #
 # Program Initialize
 #
 
+# Save number of nodes found
 RACE.num_nodes = len(INTERFACE.nodes)
 print 'Number of nodes found: {0}'.format(RACE.num_nodes)
 
-gevent.sleep(0.500) # Delay to get I2C addresses
-default_frequencies() # Set default frequencies based on number of nodes
+# Delay to get I2C addresses through interface class initialization
+gevent.sleep(0.500)
+# Set default frequencies based on number of nodes
+default_frequencies()
 
-INTERFACE.set_calibration_threshold_global(80)
+# Clear any current laps from the database on each program start
+DB.session.query(CurrentLap).delete()
+DB.session.commit() # DB session commit here needed to prevent 'application context' errors
 
 # Run database initialization function, run once then comment out
 # db_init()
 
-# Clear any current laps from the database on each program start
-DB.session.query(CurrentLap).delete() 
-DB.session.commit() # DB session commit here needed to prevent 'application context' errors
-
 # Test data - Current laps
-DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=0, lap_time_stamp=5000, lap_time=5000, lap_time_formatted=time_format(5000)))
-DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=1, lap_time_stamp=15000, lap_time=10000, lap_time_formatted=time_format(10000)))
-DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=2, lap_time_stamp=30000, lap_time=15000, lap_time_formatted=time_format(15000)))
-DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=0, lap_time_stamp=6000, lap_time=6000, lap_time_formatted=time_format(6000)))
-DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=1, lap_time_stamp=15000, lap_time=9000, lap_time_formatted=time_format(9000)))
-DB.session.add(CurrentLap(node_index=1, pilot_id=1, lap_id=0, lap_time_stamp=5000, lap_time=5000, lap_time_formatted=time_format(5000)))
-DB.session.add(CurrentLap(node_index=1, pilot_id=1, lap_id=1, lap_time_stamp=14000, lap_time=9000, lap_time_formatted=time_format(9000)))
-DB.session.commit()
+# DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=0, lap_time_stamp=5000, lap_time=5000, lap_time_formatted=time_format(5000)))
+# DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=1, lap_time_stamp=15000, lap_time=10000, lap_time_formatted=time_format(10000)))
+# DB.session.add(CurrentLap(node_index=2, pilot_id=2, lap_id=2, lap_time_stamp=30000, lap_time=15000, lap_time_formatted=time_format(15000)))
+# DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=0, lap_time_stamp=6000, lap_time=6000, lap_time_formatted=time_format(6000)))
+# DB.session.add(CurrentLap(node_index=3, pilot_id=3, lap_id=1, lap_time_stamp=15000, lap_time=9000, lap_time_formatted=time_format(9000)))
+# DB.session.add(CurrentLap(node_index=1, pilot_id=1, lap_id=0, lap_time_stamp=5000, lap_time=5000, lap_time_formatted=time_format(5000)))
+# DB.session.add(CurrentLap(node_index=1, pilot_id=1, lap_id=1, lap_time_stamp=14000, lap_time=9000, lap_time_formatted=time_format(9000)))
+# DB.session.commit()
 
-emit_leaderboard()
 
 if __name__ == '__main__':
     SOCKET_IO.run(APP, host='0.0.0.0', debug=True)
