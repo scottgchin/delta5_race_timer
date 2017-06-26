@@ -49,7 +49,7 @@
 				$('#current_laps_' + i + ' tbody > tr').remove();
 				$.each(node_index.lap_id, function (j, lap_id) { // j is loop num, lap_id is not used
 					// No lap deletion for first or last lap
-					if (node_index.lap_id[j] == 0 || node_index.lap_id[j] == node_index.lap_id[node_index.lap_id.length - 1]) {
+					if (node_index.lap_id[j] == 0) {
 						var $tr = $('<tr>').append(
 							$('<td>').text(node_index.lap_id[j]),
 							$('<td>').text(node_index.lap_time[j])

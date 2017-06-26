@@ -362,17 +362,23 @@ def on_delete_lap(data):
     '''Delete a false lap.'''
     node_index = data['node']
     lap_id = data['lapid']
-    # Update the lap_time for the lap after
-    previous_lap = CurrentLap.query.filter_by(node_index=node_index, lap_id=lap_id-1).first()
-    next_lap = CurrentLap.query.filter_by(node_index=node_index, lap_id=lap_id+1).first()
-    next_lap.lap_time = next_lap.lap_time_stamp - previous_lap.lap_time_stamp
-    next_lap.lap_time_formatted = time_format(next_lap.lap_time)
-    # Delete the false lap
-    CurrentLap.query.filter_by(node_index=node_index, lap_id=lap_id).delete()
-    # Update lap numbers
-    for lap in CurrentLap.query.filter_by(node_index=node_index).all():
-        if lap.lap_id > lap_id:
-            lap.lap_id = lap.lap_id - 1
+    max_lap = DB.session.query(DB.func.max(CurrentLap.lap_id)) \
+        .filter_by(node_index=node_index).scalar()
+    if lap_id is not max_lap:
+        # Update the lap_time for the next lap
+        previous_lap = CurrentLap.query.filter_by(node_index=node_index, lap_id=lap_id-1).first()
+        next_lap = CurrentLap.query.filter_by(node_index=node_index, lap_id=lap_id+1).first()
+        next_lap.lap_time = next_lap.lap_time_stamp - previous_lap.lap_time_stamp
+        next_lap.lap_time_formatted = time_format(next_lap.lap_time)
+        # Delete the false lap
+        CurrentLap.query.filter_by(node_index=node_index, lap_id=lap_id).delete()
+        # Update lap numbers
+        for lap in CurrentLap.query.filter_by(node_index=node_index).all():
+            if lap.lap_id > lap_id:
+                lap.lap_id = lap.lap_id - 1
+    else:
+        # Delete the false lap
+        CurrentLap.query.filter_by(node_index=node_index, lap_id=lap_id).delete()
     DB.session.commit()
     server_log('Lap deleted: Node {0} Lap {1}'.format(node_index, lap_id))
     emit_current_laps() # Race page, update web client
