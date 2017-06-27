@@ -108,7 +108,7 @@ ExecStart=/usr/bin/python /home/pi/delta5_race_timer/src/delta5server/server.py
 [Install]
 WantedBy=multi-user.target
 ```
-Save and exit, [CTRL-X], [Y], [ENTER]
+save and exit, [CTRL-X], [Y], [ENTER]
 
 2. Update permissions
 ```
