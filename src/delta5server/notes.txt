@@ -1,9 +1,0 @@
-
-jinja query for distinct
-{% for band in frequencies.query.with_entities(frequencies.band).distinct() %}
-
-python for loop distinct
-for node in DB.session.query(CurrentLap.node_index).distinct():
-
-get max value with where
-print DB.session.query(DB.func.max(CurrentLap.lap_id)).filter_by(node_index=0).scalar()

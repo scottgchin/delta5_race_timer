@@ -13,6 +13,7 @@ import gevent.monkey
 gevent.monkey.patch_all()
 
 sys.path.append('../delta5interface')
+sys.path.append('/home/pi/delta5_race_timer/src/delta5interface') # Needed to run on startup
 from Delta5Interface import get_hardware_interface
 
 from Delta5Race import get_race_state
