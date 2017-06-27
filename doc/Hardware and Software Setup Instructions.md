@@ -70,7 +70,7 @@ sudo apt-get update && sudo apt-get upgrade
 
 5. Clone or download this repo to '/home/pi/' on the Raspberry Pi
 
-6. Open a terminal in the '/delta5_race_timer/src/delta5server' and run
+6. Open a terminal in '/delta5_race_timer/src/delta5server' and run
 ```
 sudo pip install -r requirements.txt
 ```
@@ -81,3 +81,43 @@ sudo pip install -r requirements.txt
 2. Configure 'i2cSlaveAddress' in the setup section of the .ino
 
 3. Upload to each Arduino receiver node changing 'i2cSlaveAddress' each time
+
+### Start the Server
+
+#### Manual Start
+1. Open a terminal in '/delta5_race_timer/src/delta5server' and run
+```
+python server.py
+```
+
+#### Start on Boot
+1. Create a service
+```
+sudo nano /lib/systemd/system/delta5.service
+```
+with the following contents
+```
+[Unit]
+Description=Delta5 Server
+After=multi-user.target
+
+[Service]
+Type=idle
+ExecStart=/usr/bin/python /home/pi/delta5_race_timer/src/delta5server/server.py
+
+[Install]
+WantedBy=multi-user.target
+```
+Save and exit, [CTRL-X], [Y], [ENTER]
+
+2. Update permissions
+```
+sudo chmod 644 /lib/systemd/system/delta5.service
+```
+
+3. Start on boot
+```
+sudo systemctl daemon-reload
+sudo systemctl enable myscript.service
+sudo reboot
+```
