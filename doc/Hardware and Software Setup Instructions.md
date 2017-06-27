@@ -118,6 +118,6 @@ sudo chmod 644 /lib/systemd/system/delta5.service
 3. Start on boot
 ```
 sudo systemctl daemon-reload
-sudo systemctl enable myscript.service
+sudo systemctl enable delta5.service
 sudo reboot
 ```
