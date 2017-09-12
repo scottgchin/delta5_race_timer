@@ -31,9 +31,16 @@
 // Node 5 = 16, Node 6 = 18, Node 7 = 20, Node 8 = 22
 #define i2cSlaveAddress 8
 
-const int slaveSelectPin = 10; // Setup data pins for rx5808 comms
-const int spiDataPin = 11;
-const int spiClockPin = 13;
+//#define LEONARDO
+#ifdef LEONARDO
+	const int slaveSelectPin = 15; // Setup data pins for rx5808 comms
+	const int spiDataPin = 14;
+	const int spiClockPin = 16;
+#else
+	const int slaveSelectPin = 10; // Setup data pins for rx5808 comms
+	const int spiDataPin = 11;
+	const int spiClockPin = 13;
+#endif
 
 #define READ_ADDRESS 0x00
 #define READ_FREQUENCY 0x03
@@ -254,7 +261,11 @@ void setRxModule(int frequency) {
 
 // Read the RSSI value for the current channel
 int rssiRead() {
-	return analogRead(0);
+	#ifdef LEONARDO
+		return analogRead(3);
+	#else
+		return analogRead(0);
+	#endif
 }
 
 // Main loop
