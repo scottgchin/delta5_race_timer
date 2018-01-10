@@ -44,6 +44,11 @@ Complete wiring connections between each Arduino and the Raspberry Pi.
 Note: be sure all Receiver Nodes and the Raspberry Pi are tied to a common ground; if not, the i2c messages can be corrupted.
 ![system wiring](img/D5-i2c.png)
 
+Completed setup
+
+![https://scontent-ort2-2.xx.fbcdn.net/v/t1.0-9/26731767_10213166436747788_6972254961227699136_n.jpg?oh=964acd5baa1ced236cf792c9b1949e6d&oe=5AB87138]
+
+
 ## Software Setup
 
 ### Receiver Nodes (Arduinos)
