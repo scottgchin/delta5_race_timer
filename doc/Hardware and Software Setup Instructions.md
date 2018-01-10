@@ -59,7 +59,22 @@ Configure the '#define i2cSlaveAddress' line of the .ino for each node before up
 #define i2cSlaveAddress 8
 ```
 
-### System (Raspberry Pi)
+### System (Raspberry Pi Image)
+
+Pre built Raspberry pi images are available from here [https://github.com/spuder/pi-gen/releases](https://github.com/spuder/pi-gen/releases)
+
+- Download the .zip
+- Install [etcher](https://etcher.io/) 
+- Use etcher to write image to sd card
+- Power On Raspberry pi
+- Find ipAddress of Rasbperry Pi
+- Navigate to `http://<ipaddress>`
+
+
+### System (Manual Install)
+
+The pre built images are easier to start with. The following steps will install the software by hand. 
+
 Start by installing Raspbian, follow the official instructions here: https://www.raspberrypi.org/downloads/raspbian/, use 'RASPBIAN JESSIE WITH PIXEL'
 
 Enable I2C on the Raspberry Pi, go to 'Advanced Options' and enable I2C.
