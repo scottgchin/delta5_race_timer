@@ -66,9 +66,10 @@ Pre built Raspberry pi images are available from here [https://github.com/spuder
 - Download the .zip
 - Install [etcher](https://etcher.io/) 
 - Use etcher to write image to sd card
-- Power On Raspberry pi
-- Find ipAddress of Rasbperry Pi
-- Navigate to `http://<ipaddress>`
+- Power On Raspberry pi (wait 5 minutes for first config)
+- Navigate to [http://delta5.local](http://delta5.local)
+
+_If http://delta5.local does not work, you may not have bonjour/zeroconf installed. You can always use the ip address instead. http://\<ipaddress\>_
 
 
 ### System (Manual Install)
