@@ -35,7 +35,7 @@
 // WARNING!!!!
 // When connecting AREF pin to any voltage source between 0-5V, always uncomment following line!
 // Otherwise you will fry your Ardiuno
-#define USE_3V3_RSSI_AREF
+//#define USE_3V3_RSSI_AREF
 
 const int slaveSelectPin = 10; // Setup data pins for rx5808 comms
 const int spiDataPin = 11;
