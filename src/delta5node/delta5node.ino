@@ -31,6 +31,12 @@
 // Node 5 = 16, Node 6 = 18, Node 7 = 20, Node 8 = 22
 #define i2cSlaveAddress 8
 
+// RSSI Setup -- Enable this to use 3.3V as reference for RSSI ADC
+// WARNING!!!!
+// When connecting AREF pin to any voltage source between 0-5V, always uncomment following line!
+// Otherwise you will fry your Ardiuno
+//#define USE_3V3_RSSI_AREF
+
 const int slaveSelectPin = 10; // Setup data pins for rx5808 comms
 const int spiDataPin = 11;
 const int spiClockPin = 13;
@@ -122,6 +128,17 @@ uint16_t vtxHexTable[] = {
 // Initialize program
 void setup() {
 	Serial.begin(115200); // Start serial for output/debugging
+
+	#ifdef USE_3V3_RSSI_AREF
+	// Set reference voltage for analog RSSI signal
+	analogReference(EXTERNAL);
+	// After setting the reference voltage the first few readings my not be accurate
+	// therefor we read the analog signal 3 times before continuing
+	for (int i = 0; i < 3; i++) {
+		rssiRead();
+		delay(10);
+	}
+	#endif
 
 	pinMode (slaveSelectPin, OUTPUT); // RX5808 comms
 	pinMode (spiDataPin, OUTPUT);
