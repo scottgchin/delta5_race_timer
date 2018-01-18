@@ -1,6 +1,8 @@
 from datetime import datetime
 from datetime import timedelta
+from subprocess import PIPE, Popen
 import time
+import socket
 
 class BaseHardwareInterface(object):
     def __init__(self):
@@ -16,6 +18,12 @@ class BaseHardwareInterface(object):
        ms = round((dt.days * 24 * 60 * 60 + dt.seconds) * 1000 + dt.microseconds / 1000.0)
        return ms
 
+    def get_cpu_temperature(self):
+        """get cpu temperature using vcgencmd"""
+        process = Popen(['vcgencmd', 'measure_temp'], stdout=PIPE)
+        output, _error = process.communicate()
+        return float(output[output.index('=') + 1:output.rindex("'")])
+    
     #
     # Get Json Node Data Functions
     #
@@ -60,4 +68,10 @@ class BaseHardwareInterface(object):
         return {
             'node': node.index,
             'frequency': node.frequency
+        }
+
+    def get_system_info_json(self):
+        return {
+            'cpu_temp': self.get_cpu_temperature(),
+            'hostname': socket.gethostname()
         }

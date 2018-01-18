@@ -4,6 +4,7 @@ import gevent.monkey
 gevent.monkey.patch_all()
 
 import json
+import os
 
 from flask import Flask, render_template, session, request
 from flask_socketio import SocketIO, emit, join_room, leave_room, \
@@ -67,6 +68,18 @@ def connect_handler():
 def disconnect_handler():
     print ('disconnected!!');
 
+@socketio.on('shutdown_pi')
+def on_shutdown_pi():
+    '''Shutdown the raspberry pi.'''
+    print('Shutting down pi')
+    os.system("sudo shutdown now")
+
+@socketio.on('restart_pi')
+def on_shutdown_pi():
+    '''Restart the raspberry pi.'''
+    print('Restarting pi')
+    os.system("sudo restart now")
+
 @socketio.on('get_version')
 def on_get_version():
     return firmware_version
@@ -80,6 +93,11 @@ def on_get_timestamp():
 def on_get_settings():
     print('get_settings')
     return hardwareInterface.get_settings_json()
+
+@socketio.on('get_system_info')
+def on_get_system_info():
+    print('get_system_info')
+    return hardwareInterface.get_system_info_json()
 
 @socketio.on('set_frequency')
 def on_set_frequency(data):
