@@ -13,7 +13,7 @@
 * 10 Pcs 40 Pin 2.54mm Single Row Male Pin Header Strip For Arduino -
 https://eu.banggood.com/Wholesale-Warehouse-10-Pcs-40-Pin-2_54mm-Single-Row-Male-Pin-Header-Strip-For-Arduino-wp-Eu-918427.html
 * 10pcs 40Pin 2.54mm Female Header Connector Socket For DIY Arduino - https://www.banggood.com/10pcs-40Pin-2_54mm-Female-Header-Connector-Socket-For-DIY-Arduino-p-945516.html
-* 10 female to female jumper cables - https://www.banggood.com/3-IN-1-120pcs-10cm-Male-To-Female-Female-To-Female-Male-To-Male-Jumper-Cable-Dupont-Wire-For-Arduino-p-1054670.htmlouse=CN
+* 10 female to female jumper cables - https://www.banggood.com/3-IN-1-120pcs-10cm-Male-To-Female-Female-To-Female-Male-To-Male-Jumper-Cable-Dupont-Wire-For-Arduino-p-1054670.html
 * Don't forget to buy a micro SD card for the Raspberry PI
 
 ## Hardware Setup
