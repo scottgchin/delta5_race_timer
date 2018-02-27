@@ -3,17 +3,17 @@
 ## Parts List for an 8 node system
 
 * PCBs v2.0 - 4 node board; link 2 PCBs to get an 8 node system (pack of 10) - https://www.seeedstudio.com/Delta-5-Race-Timer-v2-0-g-1048578
-* 8 * RX5808 Receiver Modules - https://www.banggood.com/FPV-5_8G-Wireless-Audio-Video-Receiving-Module-RX5808-p-84775.html
+* 1 * Raspberry Pi 3 Model B ARM Cortex-A53 CPU 1.2GHz 64-Bit Quad-Core 1GB RAM 10 Times B+ - https://www.banggood.com/Raspberry-Pi-3-Model-B-ARM-Cortex-A53-CPU-1_2GHz-64-Bit-Quad-Core-1GB-RAM-10-Times-B-p-1041862.html
 * 8 * Arduino Nano (you need 2 packs of 5) - https://www.banggood.com/5Pcs-ATmega328P-Arduino-Compatible-Nano-V3-Improved-Version-No-Cable-p-971293.html
+* 8 * RX5808 Receiver Modules - https://www.banggood.com/FPV-5_8G-Wireless-Audio-Video-Receiving-Module-RX5808-p-84775.html
 * 8 * 100k Ohm Resistors - E-Projects 10EP512100K 100k Ohm Resistors, 1/2 W, 5% (Pack of 10) - http://a.co/1uJiJUd
 * 24 * 1k Ohm Resistors - 1K Ohm, 1/4 Watt, 5%, Carbon Film Resistors (pack of 250) - http://a.co/3LwKV7i
 * 1 * Pololu 5V, 2.5A Step-Down Voltage Regulator D24V25F5 by Pololu - https://www.pololu.com/product/2850
 * 1 * Pololu 3.3V, 2.5A Step-Down Voltage Regulator D24V25F3 - https://www.pololu.com/product/2849
-* 1 * Raspberry Pi 3 Model B ARM Cortex-A53 CPU 1.2GHz 64-Bit Quad-Core 1GB RAM 10 Times B+ - https://www.banggood.com/Raspberry-Pi-3-Model-B-ARM-Cortex-A53-CPU-1_2GHz-64-Bit-Quad-Core-1GB-RAM-10-Times-B-p-1041862.html?rmmds=myorder&cur_warehouse=CN
 * 10 Pcs 40 Pin 2.54mm Single Row Male Pin Header Strip For Arduino -
 https://eu.banggood.com/Wholesale-Warehouse-10-Pcs-40-Pin-2_54mm-Single-Row-Male-Pin-Header-Strip-For-Arduino-wp-Eu-918427.html
 * 10pcs 40Pin 2.54mm Female Header Connector Socket For DIY Arduino - https://www.banggood.com/10pcs-40Pin-2_54mm-Female-Header-Connector-Socket-For-DIY-Arduino-p-945516.html
-* 10 female to female jumper cables - https://www.banggood.com/3-IN-1-120pcs-10cm-Male-To-Female-Female-To-Female-Male-To-Male-Jumper-Cable-Dupont-Wire-For-Arduino-p-1054670.html?rmmds=myorder&cur_warehouse=CN
+* 10 female to female jumper cables - https://www.banggood.com/3-IN-1-120pcs-10cm-Male-To-Female-Female-To-Female-Male-To-Male-Jumper-Cable-Dupont-Wire-For-Arduino-p-1054670.htmlouse=CN
 * Don't forget to buy a micro SD card for the Raspberry PI
 
 ## Hardware Setup
@@ -28,11 +28,11 @@ Remove the following resistor:
 
 The shield should be soldered back in place after removing the resistor.
 
-Note: the RX5808 bought via the above Banggood link already have the resistor removed. It doesn't hurt to double check a few.
+Note: the rx5808 bought via the above Banggood link already has the resistor removed. It doesn't hurt to double check a few.
 
-### Step by step Instructions
+### Step by step instructions
 
-This is what we'll work towards. It is a 4 node set-up, but is easy to extend (with almost the same steps to an 8 node set-up)
+This is what we'll work towards. It is a 4 node set-up, but is easy to extend (with almost the exact same steps to an 8 node set-up)
 ![End result](img/pcbv2/0_end_result.jpg)
 
 PCB V2 front
@@ -47,7 +47,7 @@ Soldering female pin headers to hold the Arduinos
 Adding resistors
 ![Added resistors](img/pcbv2/5_resistors_ready.jpg)
 
-Checking where the resistor has been removed from the rx5808 Module
+Checking where the rx5808 module already has the spi mod (as described above)
 ![Check the module](img/pcbv2/6_checking_module.jpg)
 
 Holding the rx5808 temporarily in place for easy soldering.
