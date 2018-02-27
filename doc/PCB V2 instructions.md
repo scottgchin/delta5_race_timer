@@ -41,7 +41,7 @@ PCB V2 front
 PCB V2 back
 ![Back](img/pcbv2/2_back.jpg)
 
-Soldering female pin headers to hold the Arduinos
+Cut the female pin headers (to hold the Arduinos) to the appropriate length and solder them to the PCB
 ![Adding female pin headers](img/pcbv2/3_female_pin_headers.jpg)
 
 Adding resistors
@@ -62,13 +62,13 @@ All rx5808 in place, verified all contacts with multimeter
 The back side at this stage
 ![back side at this stage](img/pcbv2/11_back_with_solder.jpg)
 
-Adding male pin headers for connecting RPI, a second PCB, as well as for the polulus
+Adding male pin headers for connecting the Raspberry Pi, a second PCB, as well as for the polulus
 ![add some male pin headers](img/pcbv2/12_male_pin_headers.jpg)
 
 Adding the XT60
 ![add xt60](img/pcbv2/13_xt60.jpg)
 
-Adding a 3.3V polulu (left) for the rx5808 and a 5V polulu for powering the Arduinos and RPI. Note that in an 8-node setup the second PCB does not need any polulus.
+Adding a 3.3V polulu (left) for the rx5808 and a 5V polulu (right) for powering the Arduinos and Raspberry Pi. Note: in an 8-node setup the second PCB does not need polulus.
 ![add polulus](img/pcbv2/14_polulu.jpg)
 
 Close-up of how the polulus are floating above the resistors.
