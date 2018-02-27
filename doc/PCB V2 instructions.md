@@ -10,6 +10,7 @@
 * 24 * 1k Ohm Resistors - 1K Ohm, 1/4 Watt, 5%, Carbon Film Resistors (pack of 250) - http://a.co/3LwKV7i
 * 1 * Pololu 5V, 2.5A Step-Down Voltage Regulator D24V25F5 by Pololu - https://www.pololu.com/product/2850
 * 1 * Pololu 3.3V, 2.5A Step-Down Voltage Regulator D24V25F3 - https://www.pololu.com/product/2849
+* 1 * XT60 Male Plug 12AWG 10cm With Wire (pack of 2) https://www.banggood.com/2-X-XT60-Male-Plug-12AWG-10cm-With-Wire-p-987484.html
 * 10 Pcs 40 Pin 2.54mm Single Row Male Pin Header Strip For Arduino -
 https://eu.banggood.com/Wholesale-Warehouse-10-Pcs-40-Pin-2_54mm-Single-Row-Male-Pin-Header-Strip-For-Arduino-wp-Eu-918427.html
 * 10pcs 40Pin 2.54mm Female Header Connector Socket For DIY Arduino - https://www.banggood.com/10pcs-40Pin-2_54mm-Female-Header-Connector-Socket-For-DIY-Arduino-p-945516.html
@@ -44,7 +45,7 @@ PCB V2 back
 Cut the female pin headers (to hold the Arduinos) to the appropriate length and solder them to the PCB
 ![Adding female pin headers](img/pcbv2/3_female_pin_headers.jpg)
 
-Adding resistors
+Adding resistors, the PCB indicates which goes where
 ![Added resistors](img/pcbv2/5_resistors_ready.jpg)
 
 Checking where the rx5808 module already has the spi mod (as described above)
