@@ -32,7 +32,7 @@ Note: the rx5808 bought via the above Banggood link already has the resistor rem
 
 ### Step by step instructions
 
-This is what we'll work towards. It is a 4 node set-up, but is easy to extend (with almost the exact same steps to an 8 node set-up)
+This is what we'll work towards. It is a 4 node set-up, but is easy to extend (with almost the exact same steps for an 8 node set-up).
 ![End result](img/pcbv2/0_end_result.jpg)
 
 PCB V2 front
