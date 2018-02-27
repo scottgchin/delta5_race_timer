@@ -1,4 +1,4 @@
-# Hardware and Software Setup Instructions
+# PCB V2 Setup Instructions
 
 ## Parts List for an 8 node system
 
