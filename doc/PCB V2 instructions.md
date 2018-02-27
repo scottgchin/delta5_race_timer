@@ -80,13 +80,13 @@ Added jumpers to power the Arduinos (remove jumpers if you want to update the so
 How jumpers are made :D
 ![how the jumpers were made](img/pcbv2/17_how_jumpers_are_made.jpg)
 
-Plugging in the Arduinos
+Plugging in the Arduinos. There is a [pdf guide on how to upload the software to the Arduinos](https://drive.google.com/file/d/0B9OE5zhYmglkelZBYmFtZkROUWpmRVBySlNTcm8wSkRzT3lz/view).
 ![arduinos plugged in](img/pcbv2/18_arduinos.jpg)
 
-Connections between Raspberry PI and PCB
+Connections between Raspberry PI and PCB. Clone the [git repository](https://github.com/scottgchin/delta5_race_timer) on your Raspberry Pi or look at the resources post in https://www.facebook.com/groups/Delta5RaceTimer to download the latest SD card image of Delta 5.
 ![connections between rpi and pcb](img/pcbv2/19_connections.jpg)
 
-Adding an ethernet cable
+Add an ethernet cable and plug it into your router.
 ![](img/pcbv2/20_eth0.jpg)
 
 To get from the 4-node to the 8-node system, repeat all the steps (except the polulus) on a second PCB. Then connect the six pin headers on the side of the first PCB to the corresponding pin headers on the second PCB.
