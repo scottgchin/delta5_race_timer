@@ -1,6 +1,8 @@
 from datetime import datetime
 from datetime import timedelta
+from subprocess import PIPE, Popen
 import time
+import socket
 
 class BaseHardwareInterface(object):
     def __init__(self):
@@ -9,6 +11,12 @@ class BaseHardwareInterface(object):
         self.trigger_threshold = 20
         self.start_time = datetime.now()
         self.filter_ratio = 50
+
+    def get_cpu_temperature(self):
+        """get cpu temperature using vcgencmd"""
+        process = Popen(['vcgencmd', 'measure_temp'], stdout=PIPE)
+        output, _error = process.communicate()
+        return float(output[output.index('=') + 1:output.rindex("'")])
 
     # returns the elapsed milliseconds since the start of the program
     def milliseconds(self):
@@ -60,4 +68,10 @@ class BaseHardwareInterface(object):
         return {
             'node': node.index,
             'frequency': node.frequency
+        }
+
+    def get_system_info_json(self):
+        return {
+            'cpu_temp': self.get_cpu_temperature(),
+            'hostname': socket.gethostname()
         }
