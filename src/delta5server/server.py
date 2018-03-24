@@ -11,6 +11,7 @@ from flask_sqlalchemy import SQLAlchemy
 
 import gevent
 import gevent.monkey
+import RPi.GPIO as GPIO
 gevent.monkey.patch_all()
 
 sys.path.append('../delta5interface')
@@ -31,6 +32,11 @@ APP.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 DB = SQLAlchemy(APP)
 
 INTERFACE = get_hardware_interface()
+
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BOARD)
+GPIO.setup(37, GPIO.OUT)
+
 RACE = get_race_state() # For storing race management variables
 
 PROGRAM_START = datetime.now()
@@ -222,6 +228,11 @@ def settings():
                            profiles = Profiles,
                            current_fix_race_time=FixTimeRace.query.get(1).race_time_sec,
 						   lang_id=RACE.lang_id)
+@APP.route('/help')
+def help():
+    '''Route to help page.'''
+    return render_template('help.html')
+
 
 # Debug Routes
 
@@ -1132,5 +1143,9 @@ INTERFACE.set_trigger_threshold_global(tune_val.t_threshold)
 # DB.session.commit()
 
 
-if __name__ == '__main__':
-    SOCKET_IO.run(APP, host='0.0.0.0', port=5000, debug=True)
+if __name__ == '__main__':	
+	try:
+		GPIO.output(37, GPIO.HIGH)
+		SOCKET_IO.run(APP, host='0.0.0.0', port=5000, debug=True)
+	finally:
+		GPIO.cleanup()

@@ -1,0 +1,95 @@
+{% extends "layout.html" %} {% block title %}Help{% endblock %} {% block head %}
+
+
+{% endblock %} {% block content %}
+
+<html>
+<head>
+</head>
+<body>
+<h2>Auto Calibration and Sensor Tuning Parameters</h2>
+
+	<p>The Delta5 Race Timer will auto-calibrate trigger values for the nodes during the first pass of the timing gate after starting each new race.
+	<br>In order for auto-calibration to work, the system has to make a guess about when a quad passes the gate the first time.
+	>br>In theory, the RSSI will go up as you approach the timing gate and then fall as you travel away from it. In practice, there is a lot of noise and the value oscillates quite a bit.
+	<br>Auto-calibration works best with the launch pads and start gate positioned in the middle of a straight away. You want a clean rise and fall of the RSSI value for the first pass and for each lap after.</p>
+<br>
+<br>
+
+<h4>First Pass</h4>
+
+	<p>To help with this explanation we're going to use some example values talking about one quad passing the gate. Let's assume that with the quad powered off the sensor is
+	<br>getting a background RSSI value of 100. With the quad powered and on the launch pad some distance away the RSSI is 150.After the race start button is pressed
+	<br>and the quad starts moving towards the gate, the RSSI value will begin to increase from its initial value of 150.
+	<br>Eventually the quad passes the gate and the RSSI value starts to fall, let's say the Peak RSSI seen was 300.
+	<br>The trigger is set during this pass by subtracting the Calibration Offset (8) from the Peak RSSI (300), so the Trigger will be 292.
+	<br>Now the system is waiting to detect when the quad has left the starting gate to confirm the Peak RSSI and Trigger values detected. It waits for the RSSI value to fall below the
+	<br>Trigger (292) minus Calibration Threshold (95) which is 197. Once the RSSI has dropped below 197 the system considers the first pass to be complete.</p>
+<br>
+<br>
+
+<h4>Future Passes</h4>
+
+	<p>The system is now waiting for the RSSI to rise above the Trigger value of 292 again. Once this happens it will consider the next gate pass to be happening.
+	<br>It will keep track of the Peak RSSI value seen and the time it happened, and continue to do so until the RSSI value falls below
+	<br>Trigger (292) minus Trigger Threshold (40) which is 252. Once the RSSI has dropped below 252, that gate pass is complete and the lap information is sent to the Raspberry Pi.
+	<br>Note that the passing time is taken when the RSSI has reached it peak (when the quad should be closest to the sensor).
+	<br>Even if larger threshold values cause there to be a delay in the lap being reported, the timing information will sill be correct.
+<br>
+<br>
+
+<h2>Tuning</h2>
+
+	<p>The following parameters are used to tune the timing system in order to recognize when the quad passes the timing gate.</p>
+<br>
+<br>
+
+<h4>Calibration Offset</h4>
+	
+	<p>If you are missing some passes, it means the Calibration Offset value is too small and the quad is not reaching as high a peak RSSI value as was seen on the first pass.
+	<br>Increase Calibration Offset to ensure all laps are captured.</p>
+<br>
+<br>
+
+<h4>Calibration Threshold</h4>
+	
+	<p>Adds a buffer around the fluctuating RSSI value during the first pass. Increase the value if you are getting lower than expected trigger values because the fist
+	<br>pass has been triggered before actually crossing the gate. If you are not getting a pass record for the fist pass (and likely ever), decrease this value.
+	<br>A relatively large value is needed to avoid false positives because of noise in the RSSI signal.</p>
+<br>
+<br>
+
+<h4>Trigger Threshold</h4>
+	
+	<p>Increase this value if you get several pass records while passing the start gate. Lower this value if the quad has to travel very far before a passing event is triggered.</p>
+<br>
+<br>
+
+<h2>Running Races</h2>
+
+	<p>The race director will spend most of their time on this page running races. Start by selecting the 'Heat' button to set which heat will be racing.
+	<br>Click 'Start Race' for a count up timer starting from zero with no defined end. This is used for heads up racing, first to finish X laps.
+	<br>The race director clicks the 'Stop Race' button after all pilots have completed their laps. Alternatively click the 'Start Race 2min' for a count down timer from two minutes.
+	<br>This is used for most laps racing, each pilot has two minutes to complete as many laps as possible. After the last buzzer and all pilots have completed their last lap,
+	<br>click the 'Stop Race' button. For each node in a row under the pilot callsigns will be the RSSI values, Current RSSI / Trigger / Peak.
+	<br>This gives the race director immediate sensor feedback for any adjustments that might need to be made. During a race there will be a 'X' button next to each lap.
+	<br>This will discard that lap and move it's time into the next lap if it's not the last lap. It's generally perferable to tune the system to pick
+	<br>up more laps instead of missing laps and this is how the extras are deleted. At the end of the race you may have pilots flying by the
+	<br>start gate when they go to land, this is also how you remove those laps which might get picked up. After each race, click 'Save Laps' to store the
+	<br>results of a good race to the database, or 'Clear Laps' for a false start or as needed to discard the current laps.
+
+
+
+
+
+
+</body>
+</html>
+
+{% endblock %}
+
+
+
+
+
+
