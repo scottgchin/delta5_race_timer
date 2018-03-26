@@ -70,9 +70,14 @@
 
 		voice_label( {{ lang_id }} );
 		
+		var heatbeatCounter = 0;
+
 		socket.on('heartbeat', function (msg) {
-			for (i = 0; i < msg.current_rssi.length; i++) {
-				$('.current_rssi_' + i).html(msg.current_rssi[i]);
+			if (++heatbeatCounter >= 5) {   //do RSSI updates less often than speak-queue checks
+				heatbeatCounter = 0;
+				for (i = 0; i < msg.current_rssi.length; i++) {
+					$('.current_rssi_' + i).html(msg.current_rssi[i]);
+				}
 			}
 		});
 

@@ -3,6 +3,10 @@
 <audio id="buzzer" src="./static/audio/buzzer.mp3" type="audio/mp3"></audio>
 
 <script type="text/javascript" charset="utf-8">
+
+	var speakObjsQueue = [];
+	var checkSpeakQueueFlag = true;
+
 	$(document).ready(function () {
 		var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
 
@@ -36,9 +40,27 @@
 			}
 		});
 
+		var heatbeatCounter = 0;
+
 		socket.on('heartbeat', function (msg) {
-			for (i = 0; i < msg.current_rssi.length; i++) {
-				$('.current_rssi_' + i).html(msg.current_rssi[i]);
+			if (speakObjsQueue.length > 0) {
+				var isSpeakingFlag = $().articulate('isSpeaking');
+				if (checkSpeakQueueFlag) {
+					if (!isSpeakingFlag) {
+						var obj = speakObjsQueue.shift();
+						if (speakObjsQueue.length > 0)
+							checkSpeakQueueFlag = false;
+						doSpeak(obj);
+					}
+				}  //make sure previous speak has started before checking queue again
+				else if (isSpeakingFlag)
+					checkSpeakQueueFlag = true;
+			}
+			if (++heatbeatCounter >= 5) {   //do RSSI updates less often than speak-queue checks
+				heatbeatCounter = 0;
+				for (i = 0; i < msg.current_rssi.length; i++) {
+					$('.current_rssi_' + i).html(msg.current_rssi[i]);
+				}
 			}
 		});
 
@@ -91,7 +113,7 @@
 		});
 
 		socket.on('phonetic_data', function (msg) {
-			var $ttstest = msg.pilot + " lap " + msg.lap + " " + msg.phonetic;
+			var $ttstest = msg.pilot + ", lap " + msg.lap + ", " + msg.phonetic;
 			speak('<div class="speech">' + $ttstest + '</div> div.speech');				
 		})
 
@@ -361,7 +383,7 @@
 
 	var sellang = {{ lang_id }};
 
-	function speak(obj) {
+	function doSpeak(obj) {
 		switch (sellang) {
 			case 1:
 				$(obj).articulate('setVoice','name','Microsoft David Desktop - English (United States)').articulate('speak');
@@ -429,6 +451,12 @@
 	function ratefast(obj) {
 		$(obj).articulate('rate', 3.0);
 	};
+
+
+	function speak(obj) {
+		speakObjsQueue.push(obj);
+	};
+
 </script>
 {% endblock %} {% block content %}
 
