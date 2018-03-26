@@ -81,6 +81,8 @@ struct {
 	uint16_t volatile rssiPeak = 0;
 	// The time of the peak raw rssi for the current pass
 	uint32_t volatile rssiPeakRawTimeStamp = 0;
+	// The peak smoothed rssi seen since the node was powered on or frequency set
+	uint16_t volatile nodeRssiPeak = 0;
 
 	// variables to track the loop time
 	uint32_t volatile loopTime = 0;
@@ -255,6 +257,14 @@ void loop() {
 	state.rssiSmoothed = (settings.filterRatioFloat * (float)state.rssiRaw) + ((1.0f-settings.filterRatioFloat) * state.rssiSmoothed);
 	state.rssi = (int)state.rssiSmoothed;
 
+	// Keep track of peak (smoothed) rssi; set trigger as offset of peak
+	if (state.rssi > state.nodeRssiPeak) {
+		state.nodeRssiPeak = state.rssi;
+		state.rssiTrigger = state.nodeRssiPeak - settings.calibrationOffset;
+		Serial.print("New nodeRssiPeak = ");
+		Serial.println(state.nodeRssiPeak);
+	}
+
 	if (state.rssiTrigger > 0) {
 		if (!state.crossing && state.rssi > state.rssiTrigger) {
 			state.crossing = true; // Quad is going through the gate
@@ -269,14 +279,10 @@ void loop() {
 		}
 
 		if (state.crossing) {
-			int triggerThreshold = settings.triggerThreshold;
 
-			// If in calibration mode, keep raising the trigger value
-			if (state.calibrationMode) {
-				state.rssiTrigger = max(state.rssiTrigger, state.rssi - settings.calibrationOffset);
-				// when calibrating, use a larger threshold
-				triggerThreshold = settings.calibrationThreshold;
-			}
+			// when in calibration mode, use a larger threshold
+			int triggerThreshold = state.calibrationMode ?
+					settings.calibrationThreshold : settings.triggerThreshold;
 
 			state.rssiPeak = max(state.rssiPeak, state.rssi);
 
@@ -416,6 +422,7 @@ byte i2cHandleRx(byte command) { // The first byte sent by the I2C master is the
 			if (readAndValidateIoBuffer(0x51, 2)) {
 				settings.vtxFreq = ioBufferRead16();
 				setRxModule(settings.vtxFreq); // Shouldn't do this in Interrupt Service Routine
+				state.nodeRssiPeak = 0;  // restart rssi peak tracking for node
 				success = true;
 			}
 			break;
@@ -428,7 +435,7 @@ byte i2cHandleRx(byte command) { // The first byte sent by the I2C master is the
 		case WRITE_CALIBRATION_MODE:
 			if (readAndValidateIoBuffer(WRITE_CALIBRATION_MODE, 1)) {
 				state.calibrationMode = ioBufferRead8();
-				state.rssiTrigger = state.rssi - settings.calibrationOffset;
+				state.rssiTrigger = state.nodeRssiPeak - settings.calibrationOffset;
 				lastPass.rssiPeakRaw = 0;
 				lastPass.rssiPeak = 0;
 				state.rssiPeakRaw = 0;
