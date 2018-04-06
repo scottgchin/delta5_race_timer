@@ -216,6 +216,7 @@ def race():
             for node in INTERFACE.nodes])
 
 @APP.route('/seeding')
+@requires_auth
 def seeding():
     '''Route to help page.'''
     return render_template('seeding.html')
