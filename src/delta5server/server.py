@@ -210,7 +210,15 @@ def race():
                            current_heat=RACE.current_heat,
                            heats=Heat, pilots=Pilot,
                            fix_race_time=FixTimeRace.query.get(1).race_time_sec,
-						   lang_id=RACE.lang_id)
+						   lang_id=RACE.lang_id,
+        frequencies=[node.frequency for node in INTERFACE.nodes],
+        channels=[Frequency.query.filter_by(frequency=node.frequency).first().channel
+            for node in INTERFACE.nodes])
+
+@APP.route('/seeding')
+def seeding():
+    '''Route to help page.'''
+    return render_template('seeding.html')
 
 @APP.route('/settings')
 @requires_auth
@@ -225,6 +233,7 @@ def settings():
                            profiles = Profiles,
                            current_fix_race_time=FixTimeRace.query.get(1).race_time_sec,
 						   lang_id=RACE.lang_id)
+
 @APP.route('/help')
 def help():
     '''Route to help page.'''
@@ -352,6 +361,14 @@ def on_set_pilot_name(data):
     DB.session.commit()
     server_log('Pilot name set: Pilot {0} Name {1}'.format(pilot_id, name))
     emit_pilot_data() # Settings page, new pilot name
+
+@SOCKET_IO.on('speak_pilot')
+def on_speak_pilot(data):
+    '''Speaks the phonetic name of the pilot.'''
+    pilot_id = data['pilot_id']
+    phtext = Pilot.query.filter_by(pilot_id=pilot_id).first().phonetic
+    emit_phonetic_text(phtext)
+    server_log('Speak pilot: {0}'.format(phtext))
 
 @SOCKET_IO.on('add_profile')
 def on_add_profile():
@@ -616,6 +633,13 @@ def on_delete_lap(data):
     emit_current_laps() # Race page, update web client
     emit_leaderboard() # Race page, update web client
 
+@SOCKET_IO.on('simulate_lap')
+def on_simulate_lap(data):
+    '''Simulates a lap (for debug testing).'''
+    node_index = data['node']
+    server_log('Simulated lap: Node {0}'.format(node_index))
+    INTERFACE.intf_simulate_lap(node_index)
+
 # Socket io emit functions
 
 def emit_race_status():
@@ -762,11 +786,11 @@ def emit_current_heat():
         'callsign': callsigns
     })
 
-def emit_phonetic_data(pilot_id, lap_time):
+def emit_phonetic_data(pilot_id, lap_id, lap_time):
     '''Emits phonetic data.'''
     phonetic_time = phonetictime_format(lap_time)
     phonetic_name = Pilot.query.filter_by(pilot_id=pilot_id).first().phonetic
-    SOCKET_IO.emit('phonetic_data', {'pilot': phonetic_name, 'phonetic': phonetic_time})
+    SOCKET_IO.emit('phonetic_data', {'pilot': phonetic_name, 'lap': lap_id, 'phonetic': phonetic_time})
 
 def emit_language_data():
     '''Emits language.'''
@@ -776,6 +800,10 @@ def emit_current_fix_race_time():
     ''' Emit current fixed time race time '''
     race_time_sec = FixTimeRace.query.get(1).race_time_sec
     SOCKET_IO.emit('set_fix_race_time',{ fix_race_time: race_time_sec})
+
+def emit_phonetic_text(phtext):
+    '''Emits given phonetic text.'''
+    SOCKET_IO.emit('speak_phonetic_text', {'text': phtext})
 
 #
 # Program Functions
@@ -812,14 +840,12 @@ def time_format(millis):
     return '{0:02d}:{1:02d}.{2:03d}'.format(minutes, seconds, milliseconds)
 
 def phonetictime_format(millis):
-    '''Convert milliseconds to 00:00.000'''
-    millis = int(millis)
-    minutes = millis / 60000
-    over = millis % 60000
-    seconds = over / 1000
-    over = over % 1000
-    milliseconds = over/10
-    return '{0:01d}.{1:02d}'.format(seconds, milliseconds)	
+    '''Convert milliseconds to phonetic'''
+    millis = int(millis + 50)  # round to nearest tenth of a second
+    seconds = millis / 1000
+    over = (millis % 60000) % 1000
+    tenths = over / 100
+    return '{0:01d}.{1:01d}'.format(seconds, tenths)
 	
 def pass_record_callback(node, ms_since_lap):
     '''Handles pass records from the nodes.'''
@@ -861,7 +887,7 @@ def pass_record_callback(node, ms_since_lap):
         emit_current_laps() # Updates all laps on the race page
         emit_leaderboard() # Updates leaderboard
         if lap_id > 0: 
-            emit_phonetic_data(pilot_id, lap_time) # Sends phonetic data to be spoken
+            emit_phonetic_data(pilot_id, lap_id, lap_time) # Sends phonetic data to be spoken
 
 INTERFACE.pass_record_callback = pass_record_callback
 

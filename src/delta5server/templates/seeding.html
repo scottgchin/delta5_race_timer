@@ -1,0 +1,45 @@
+{% extends "layout.html" %} {% block title %}Seeding{% endblock %} {% block head %}
+
+
+{% endblock %} {% block content %}
+
+<html>
+<head>
+</head>
+<body>
+
+<h3>Seed Results</h3>
+<br>
+<p>Amount of Rounds used when Seeding : </p>
+
+<input type="text" name="roundamount">
+
+<br>
+<br>
+<br>
+<p>Seed qualifiying Rounds by : </p>
+<div class="container">
+        <div class="dropdown">
+          <button class="btn btn-default dropdown-toggle" type="button" id="menu1" data-toggle="dropdown">Choose one
+          <span class="caret"></span></button>
+          <ul class="dropdown-menu" role="menu" aria-labelledby="menu1">
+            <li role="presentation"><a role="menuitem" tabindex="-1" href="#">Average Lap</a></li>
+            <li role="presentation"><a role="menuitem" tabindex="-1" href="#">Fastest Lap</a></li>
+          </ul> 
+</div>
+
+<br>
+<br>
+<button type="button" class="btn btn-success">Calculate</button>
+		
+
+</body>
+</html>
+
+{% endblock %}
+
+
+
+
+
+
