@@ -35,7 +35,7 @@
                             Avg
                         </td>
                         <td>
-                            {{ avg_laps.GetAverageLap(heat.heat_id, round.round_id, node) }}
+                        {{ avg_laps.GetAverageLap(heat.heat_id, round.round_id, pilot_id=heats.query.filter_by(heat_id=heat.heat_id,node_index=node).first().pilot_id) }}
                         </td>
                     </tr>
                 </tbody>
@@ -45,6 +45,7 @@
     {% endfor %}
 </div>
 {% endfor %}
+{{ avg_laps.GetAverageOfAveragesForAllPilots(2) }}
 
 <!--More generic data summary needed, see server.py notes-->
 <!--<h5>Heat {# heat.heat_id #} Summary</h5>
