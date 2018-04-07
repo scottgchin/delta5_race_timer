@@ -43,64 +43,6 @@ RACE = get_race_state() # For storing race management variables
 PROGRAM_START = datetime.now()
 RACE_START = datetime.now() # Updated on race start commands
 
-#
-# Utility classes
-#
-
-class AverageLap:
-    def __init__(self, heat_id, round_id, avg_lap, pilot_id):
-        self.heat_id = heat_id
-        self.round_id = round_id
-        self.avg_lap = avg_lap
-        self.pilot_id = pilot_id
-
-    def __str__(self):
-        return "Heat: " + str(self.heat_id) + "\nRound: " + str(self.round_id) + "\nAvgLap: " + str(self.avg_lap) + "\nPilot: " + str(self.pilot_id) 
-
-class AverageLaps:
-    laps = []
-
-    def AddAverageLap(self, lap):
-        self.laps.append(lap)
-
-    def GetAverageLap(self, heat_id, round_id, pilot_id):
-        for lap in self.laps:
-            if lap.heat_id == heat_id and lap.round_id == round_id and lap.pilot_id == pilot_id:
-                formatted_lap_time = time_format(lap.avg_lap)
-                return formatted_lap_time
-        return time_format(0)
-    
-    def GetAverageOfAveragesForPilot(self, pilot_id, numAveragesToUse):
-        averageTimesForPilot = []
-        for lap in self.laps:
-            if lap.pilot_id == pilot_id:
-                averageTimesForPilot.append(lap.avg_lap)
-        
-        if len(averageTimesForPilot) < numAveragesToUse:
-            return None
-
-        averageTimesForPilot.sort()
-        averageTimesForPilot = averageTimesForPilot[0:numAveragesToUse]
-        averageOfAverages = sum(averageTimesForPilot) / float(numAveragesToUse)
-        return averageOfAverages
-
-    def GetPilotIds(self):
-        pilot_ids = set()
-        for lap in self.laps:
-            pilot_ids.add(lap.pilot_id)
-        return pilot_ids
-
-    def GetAverageOfAveragesForAllPilots(self, numAveragesToUse):
-        pdb.set_trace()
-        result = []
-        pilot_ids = self.GetPilotIds()
-        for pilot_id in pilot_ids:
-            avgOfAvgs = self.GetAverageOfAveragesForPilot(pilot_id, numAveragesToUse)
-            result.append((pilot_id, avgOfAvgs))
-        
-        result = sorted(result, key=lambda tup: tup[1])
-        return result
-
 
 #
 # Database Models
@@ -179,6 +121,65 @@ class FixTimeRace(DB.Model):
     race_time_sec = DB.Column(DB.Integer, nullable=False)
 
 #
+# Utility classes
+#
+
+class AverageLap:
+    def __init__(self, heat_id, round_id, avg_lap, pilot_id):
+        self.heat_id = heat_id
+        self.round_id = round_id
+        self.avg_lap = avg_lap
+        self.pilot_id = pilot_id
+
+    def __str__(self):
+        return "Heat: " + str(self.heat_id) + "\nRound: " + str(self.round_id) + "\nAvgLap: " + str(self.avg_lap) + "\nPilot: " + str(self.pilot_id) 
+
+class AverageLaps:
+    laps = []
+
+    def AddAverageLap(self, lap):
+        self.laps.append(lap)
+
+    def GetAverageLap(self, heat_id, round_id, pilot_id):
+        for lap in self.laps:
+            if lap.heat_id == heat_id and lap.round_id == round_id and lap.pilot_id == pilot_id:
+                formatted_lap_time = time_format(lap.avg_lap)
+                return formatted_lap_time
+        return time_format(0)
+    
+    def GetAverageOfAveragesForPilot(self, pilot_id, numAveragesToUse):
+        averageTimesForPilot = []
+        for lap in self.laps:
+            if lap.pilot_id == pilot_id:
+                averageTimesForPilot.append(lap.avg_lap)
+        
+        if len(averageTimesForPilot) < numAveragesToUse:
+            return None
+
+        averageTimesForPilot.sort()
+        averageTimesForPilot = averageTimesForPilot[0:numAveragesToUse]
+        averageOfAverages = sum(averageTimesForPilot) / float(numAveragesToUse)
+        return averageOfAverages
+
+    def GetPilotIds(self):
+        pilot_ids = set()
+        for lap in self.laps:
+            pilot_ids.add(lap.pilot_id)
+        return pilot_ids
+
+    def GetAverageOfAveragesForAllPilots(self, numAveragesToUse):
+        result = []
+        pilot_ids = self.GetPilotIds()
+        for pilot_id in pilot_ids:
+            pilot_callsign = Pilot.query.filter_by(pilot_id=pilot_id).first().callsign
+            avgOfAvgs = self.GetAverageOfAveragesForPilot(pilot_id, numAveragesToUse)
+            result.append((pilot_callsign, avgOfAvgs))
+        
+        result = sorted(result, key=lambda tup: tup[1])
+        return result
+
+
+#
 # Authentication
 #
 
@@ -205,6 +206,22 @@ def requires_auth(f):
 #
 # Routes
 #
+
+def CreateAverageLapsHandler():
+    avg_laps = AverageLaps()
+    for heat in SavedRace.query.with_entities(SavedRace.heat_id).distinct() \
+        .order_by(SavedRace.heat_id):
+        for race_round in SavedRace.query.with_entities(SavedRace.round_id).distinct() \
+        .filter_by(heat_id=heat.heat_id).order_by(SavedRace.round_id):
+            pilot_ids = SavedRace.query.with_entities(SavedRace.pilot_id).distinct(). \
+            filter_by(round_id=race_round.round_id, heat_id=heat.heat_id).all()
+            for pilot in pilot_ids:
+                avg_lap = DB.session.query(DB.func.avg(SavedRace.lap_time)) \
+                    .filter_by(heat_id=heat.heat_id, round_id=race_round.round_id, pilot_id=pilot.pilot_id) \
+                    .filter(SavedRace.lap_id != 0).scalar()
+                if avg_lap != None and pilot.pilot_id != 0:
+                    avg_laps.AddAverageLap(AverageLap(heat.heat_id, race_round.round_id, avg_lap, pilot.pilot_id))
+    return avg_laps
 
 @APP.route('/')
 def index():
@@ -250,22 +267,8 @@ def index():
     #     heat_fast_laps.append(fast_laps)
     # print heat_max_laps
     # print heat_fat_laps
-    avg_laps = AverageLaps()
-    for heat in SavedRace.query.with_entities(SavedRace.heat_id).distinct() \
-        .order_by(SavedRace.heat_id):
-        for race_round in SavedRace.query.with_entities(SavedRace.round_id).distinct() \
-        .filter_by(heat_id=heat.heat_id).order_by(SavedRace.round_id):
-            pilot_ids = SavedRace.query.with_entities(SavedRace.pilot_id).distinct(). \
-            filter_by(round_id=race_round.round_id, heat_id=heat.heat_id).all()
-            for pilot in pilot_ids:
-                avg_lap = DB.session.query(DB.func.avg(SavedRace.lap_time)) \
-                    .filter_by(heat_id=heat.heat_id, round_id=race_round.round_id, pilot_id=pilot.pilot_id) \
-                    .filter(SavedRace.lap_id != 0).scalar()
-                if avg_lap != None and pilot.pilot_id != 0:
-                    avg_laps.AddAverageLap(AverageLap(heat.heat_id, race_round.round_id, avg_lap, pilot.pilot_id))
-
     return render_template('rounds.html', num_nodes=RACE.num_nodes, rounds=SavedRace, \
-        pilots=Pilot, heats=Heat, avg_laps=avg_laps)
+        pilots=Pilot, heats=Heat, avg_laps=CreateAverageLapsHandler())
         #, heat_max_laps=heat_max_laps, heat_fast_laps=heat_fast_laps
 
 @APP.route('/heats')
