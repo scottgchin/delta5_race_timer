@@ -20,14 +20,24 @@
                 <tbody>
                     {% for lap in rounds.query.filter_by(heat_id=heat.heat_id, round_id=round.round_id, node_index=node).all() %}
                     <tr>
+                        {% if lap.lap_id != 0 %}
                         <td>
                             {{ lap.lap_id }}
                         </td>
                         <td>
                             {{ lap.lap_time_formatted }}
                         </td>
+                        {% endif %}
                     </tr>
                     {% endfor %}
+                    <tr>
+                        <td>
+                            Avg
+                        </td>
+                        <td>
+                            {{ avg_laps.GetAverageLap(heat.heat_id, round.round_id, node) }}
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
