@@ -29,3 +29,6 @@ Adds a buffer around the fluctuating RSSI value during the first pass. Increase 
 
 ##### Trigger Threshold
 Increase this value if you get several pass records while passing the start gate. Lower this value if the quad has to travel very far before a passing event is triggered.
+
+##### Filter Ratio
+The Filter Ratio configures the amount of smoothing applied to the RSSI readings in the nodes. Values can range from 1 to 255, with a default value of 10. Lower values will result in more filtering and "smoother" readings.
