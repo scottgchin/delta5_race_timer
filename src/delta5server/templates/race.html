@@ -91,7 +91,7 @@
 		});
 
 		socket.on('phonetic_data', function (msg) {
-			var $ttstest = msg.pilot + " " + msg.phonetic;
+			var $ttstest = msg.pilot + " lap " + msg.lap + " " + msg.phonetic;
 			speak('<div class="speech">' + $ttstest + '</div> div.speech');				
 		})
 
@@ -145,6 +145,14 @@
 
 		$('button#clear_laps').click(function (event) {
 			socket.emit('clear_laps');
+			return false;
+		});
+
+		$('button#simulate_lap').click(function (event) {
+			var data = {
+				node: parseInt($(this).data('node')),
+			};
+			socket.emit('simulate_lap', data);
 			return false;
 		});
 
@@ -298,6 +306,15 @@
 					{{ pilots.query.filter_by( pilot_id=heats.query.filter_by(heat_id=current_heat,node_index=node).first().pilot_id ).first().callsign
 					}}
 				</h4>
+			</div>
+			<div class="panel-heading">
+				<p class="panel-title">
+					<small>{{ channels[node] }} {{ frequencies[node] }}</small>
+				</p>
+				<!-- Comment-out <p></p> above and enable 'button' below to get simulate-lap buttons for debug testing -->
+				<!--
+				<button type="button" class="btn btn-default" id="simulate_lap" data-node="{{ node }}" onclick="this.blur();"><small>{{ channels[node] }} {{ frequencies[node] }}</small></button>
+				-->
 			</div>
 			<table class="table" id="current_laps_{{ node }}">
 				<thead>
