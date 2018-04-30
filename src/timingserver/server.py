@@ -26,6 +26,63 @@ elif sys.platform.lower().startswith('linux'):
 
 hardwareInterface = get_hardware_interface()
 
+# frequencies
+band_channel_frequency = []
+# Band A - Team BlackSheep, RangeVideo, SpyHawk, FlyCamOne USA
+band_channel_frequency.append({'band':'A', 'channel':'A1', 'frequency':'5865'})
+band_channel_frequency.append({'band':'A', 'channel':'A2', 'frequency':'5845'})
+band_channel_frequency.append({'band':'A', 'channel':'A3', 'frequency':'5825'})
+band_channel_frequency.append({'band':'A', 'channel':'A4', 'frequency':'5805'})
+band_channel_frequency.append({'band':'A', 'channel':'A5', 'frequency':'5785'})
+band_channel_frequency.append({'band':'A', 'channel':'A6', 'frequency':'5765'})
+band_channel_frequency.append({'band':'A', 'channel':'A7', 'frequency':'5745'})
+band_channel_frequency.append({'band':'A', 'channel':'A8', 'frequency':'5725'})
+# Band B - FlyCamOne Europe
+band_channel_frequency.append({'band':'B', 'channel':'B1', 'frequency':'5733'})
+band_channel_frequency.append({'band':'B', 'channel':'B2', 'frequency':'5752'})
+band_channel_frequency.append({'band':'B', 'channel':'B3', 'frequency':'5771'})
+band_channel_frequency.append({'band':'B', 'channel':'B4', 'frequency':'5790'})
+band_channel_frequency.append({'band':'B', 'channel':'B5', 'frequency':'5809'})
+band_channel_frequency.append({'band':'B', 'channel':'B6', 'frequency':'5828'})
+band_channel_frequency.append({'band':'B', 'channel':'B7', 'frequency':'5847'})
+band_channel_frequency.append({'band':'B', 'channel':'B8', 'frequency':'5866'})
+# Band E - HobbyKing, Foxtech
+band_channel_frequency.append({'band':'E', 'channel':'E1', 'frequency':'5705'})
+band_channel_frequency.append({'band':'E', 'channel':'E2', 'frequency':'5685'})
+band_channel_frequency.append({'band':'E', 'channel':'E3', 'frequency':'5665'})
+band_channel_frequency.append({'band':'E', 'channel':'E4', 'frequency':'5645'})
+band_channel_frequency.append({'band':'E', 'channel':'E5', 'frequency':'5885'})
+band_channel_frequency.append({'band':'E', 'channel':'E6', 'frequency':'5905'})
+band_channel_frequency.append({'band':'E', 'channel':'E7', 'frequency':'5925'})
+band_channel_frequency.append({'band':'E', 'channel':'E8', 'frequency':'5945'})
+# Band F - ImmersionRC, Iftron
+band_channel_frequency.append({'band':'F', 'channel':'F1', 'frequency':'5740'})
+band_channel_frequency.append({'band':'F', 'channel':'F2', 'frequency':'5760'})
+band_channel_frequency.append({'band':'F', 'channel':'F3', 'frequency':'5780'})
+band_channel_frequency.append({'band':'F', 'channel':'F4', 'frequency':'5800'})
+band_channel_frequency.append({'band':'F', 'channel':'F5', 'frequency':'5820'})
+band_channel_frequency.append({'band':'F', 'channel':'F6', 'frequency':'5840'})
+band_channel_frequency.append({'band':'F', 'channel':'F7', 'frequency':'5860'})
+band_channel_frequency.append({'band':'F', 'channel':'F8', 'frequency':'5880'})
+# Band L - Lowband
+band_channel_frequency.append({'band':'L', 'channel':'L1', 'frequency':'5362'})
+band_channel_frequency.append({'band':'L', 'channel':'L2', 'frequency':'5399'})
+band_channel_frequency.append({'band':'L', 'channel':'L3', 'frequency':'5436'})
+band_channel_frequency.append({'band':'L', 'channel':'L4', 'frequency':'5473'})
+band_channel_frequency.append({'band':'L', 'channel':'L5', 'frequency':'5510'})
+band_channel_frequency.append({'band':'L', 'channel':'L6', 'frequency':'5547'})
+band_channel_frequency.append({'band':'L', 'channel':'L7', 'frequency':'5584'})
+band_channel_frequency.append({'band':'L', 'channel':'L8', 'frequency':'5621'})
+# Band R - Raceband
+band_channel_frequency.append({'band':'R', 'channel':'R1', 'frequency':'5658'})
+band_channel_frequency.append({'band':'R', 'channel':'R2', 'frequency':'5695'})
+band_channel_frequency.append({'band':'R', 'channel':'R3', 'frequency':'5732'})
+band_channel_frequency.append({'band':'R', 'channel':'R4', 'frequency':'5769'})
+band_channel_frequency.append({'band':'R', 'channel':'R5', 'frequency':'5806'})
+band_channel_frequency.append({'band':'R', 'channel':'R6', 'frequency':'5843'})
+band_channel_frequency.append({'band':'R', 'channel':'R7', 'frequency':'5880'})
+band_channel_frequency.append({'band':'R', 'channel':'R8', 'frequency':'5917'})
+
 # Set this variable to "threading", "eventlet" or "gevent" to test the
 # different async modes, or leave it set to None for the application to choose
 # the best option based on installed packages.
@@ -79,6 +136,10 @@ def on_shutdown_pi():
     '''Restart the raspberry pi.'''
     print('Restarting pi')
     os.system("sudo restart now")
+
+@socketio.on('get_band_channel_frequency')
+def on_get_band_channel_frequency():
+    return {'band_channel_frequency':band_channel_frequency}
 
 @socketio.on('get_version')
 def on_get_version():

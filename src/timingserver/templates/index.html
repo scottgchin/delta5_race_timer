@@ -20,6 +20,7 @@
         get_timestamp = undefined;
         get_settings = undefined;
         get_system_info = undefined;
+        band_channel_frequency = undefined;
         reset = undefined;
         shutdown_pi = undefined;
         restart_pi = undefined;
@@ -144,6 +145,23 @@
                 }
             }
 
+            function get_frequency_select(frequency,index) {
+                var select = '<select class="form-control" name="frequency_val_'+index+'" id="frequency_val_'+index+'">';
+                var optgroup = "";
+                $.each(band_channel_frequency, function( index, value ) {
+                    if(optgroup!=value['band']) {
+                        if(optgroup!="") {
+                            select+="</optgroup>";
+                        }
+                        optgroup = value['band'];
+                        select += '<optgroup label="'+optgroup+'">';
+                    }
+                    select += '<option value="'+value['frequency']+'"'+(value['frequency']==frequency?' SELECTED':'')+'>'+value['channel']+" "+value['frequency']+'</option>';
+                });
+                select += "</optgroup></select>";
+                return select
+            }
+
             function simulate_pass(index) {
                 return function(event) {
                     var data = {
@@ -186,6 +204,10 @@
                 return false;
             });
 
+            socket.emit('get_band_channel_frequency',function(msg) {
+                band_channel_frequency = msg.band_channel_frequency;
+            });
+
             socket.emit('get_settings', function(msg) {
                 const Node = ({frequency, current_rssi, trigger_rssi}, index) => `
                     <div class='col-md-3'>
@@ -196,9 +218,8 @@
                             <div class="panel-body">
                             <form id="set_frequency_${index}" method="POST" action='#'>
                                 <div class="form-group">
-                                    Frequency: <span id='frequency_${index}'>${frequency}</span>
                                     <div class="input-group input-group-sm">
-                                        <input class="form-control" type="text" name="frequency_val_${index}" id="frequency_val_${index}" value='${frequency}'>
+                                        `+get_frequency_select(frequency,index)+`
                                         <span class="input-group-btn">
                                             <input class="btn btn-default" type="submit" value="Set">
                                         </span>
