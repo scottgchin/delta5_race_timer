@@ -1,7 +1,7 @@
 <!DOCTYPE HTML>
 <html>
 <head>
-    <title>Flask-SocketIO Test</title>
+    <title>Delta 5 Timing Server</title>
 
     <audio id="buzzer" src="./static/audio/beep.mp3" type="audio/mp3"></audio>
 
@@ -9,12 +9,26 @@
     <script type="text/javascript" src="./static/socket.io/1.3.5/socket.io.min.js"></script>
     <link rel="stylesheet" href="./static/bootstrap-3.3.7/css/bootstrap.min.css"></link>
     <script type="text/javascript" src=".//static/bootstrap-3.3.7/js/bootstrap.min.js"></script>
+    <style>
+        .col-md-3:nth-child(4n+1){
+            clear: left;
+        }
+    </style>
     <script type="text/javascript" charset="utf-8">
 
         get_version = undefined;
         get_timestamp = undefined;
         get_settings = undefined;
+        get_system_info = undefined;
+        band_channel_frequency = undefined;
         reset = undefined;
+        shutdown_pi = undefined;
+        restart_pi = undefined;
+
+        interval = undefined;
+
+        var SYSTEM_INFO_INTERVAL    = 5 * 1000; // 5 seconds
+        var PLAY_SOUND              = false
 
         $(document).ready(function() {
             var buzzer = $('#buzzer')[0];
@@ -81,6 +95,21 @@
                 return false;
             }
 
+            get_system_info = function(event) {
+                socket.emit('get_system_info', function(msg) {
+                    $('#cpu_temp').html(msg.cpu_temp);
+                    $('#hostname').html(msg.hostname);
+                });
+
+                // Set interval for refreshing system info
+                if (interval == undefined) {
+                    interval = setInterval(function() {
+                        get_system_info();
+                    }, SYSTEM_INFO_INTERVAL);
+                }
+                return false;
+            }
+
             reset = function() {
                 for (i=0; i<num_nodes; i++) {
                     $('#lap_table_' + i).empty();
@@ -93,6 +122,18 @@
                 get_timestamp();
             };
 
+            shutdown_pi = function() {
+                if (confirm("SHUTDOWN SYSTEM, ARE YOU SURE???")) {
+                    socket.emit('shutdown_pi');
+                }
+            }
+
+            restart_pi = function() {
+                if (confirm("RESTART SYSTEM, ARE YOU SURE???")) {
+                    socket.emit('restart_pi');
+                }
+            }
+
             function set_frequency(index) {
                 return function(event) {
                     var data = {
@@ -102,6 +143,23 @@
                     socket.emit('set_frequency', data);
                     return false;
                 }
+            }
+
+            function get_frequency_select(frequency,index) {
+                var select = '<select class="form-control" name="frequency_val_'+index+'" id="frequency_val_'+index+'">';
+                var optgroup = "";
+                $.each(band_channel_frequency, function( index, value ) {
+                    if(optgroup!=value['band']) {
+                        if(optgroup!="") {
+                            select+="</optgroup>";
+                        }
+                        optgroup = value['band'];
+                        select += '<optgroup label="'+optgroup+'">';
+                    }
+                    select += '<option value="'+value['frequency']+'"'+(value['frequency']==frequency?' SELECTED':'')+'>'+value['channel']+" "+value['frequency']+'</option>';
+                });
+                select += "</optgroup></select>";
+                return select
             }
 
             function simulate_pass(index) {
@@ -146,19 +204,22 @@
                 return false;
             });
 
+            socket.emit('get_band_channel_frequency',function(msg) {
+                band_channel_frequency = msg.band_channel_frequency;
+            });
+
             socket.emit('get_settings', function(msg) {
                 const Node = ({frequency, current_rssi, trigger_rssi}, index) => `
-                    <div class='col-md-2'>
-                        <div class='panel panel-default'>
+                    <div class='col-md-3'>
+                        <div class='panel panel-primary'>
                             <div class="panel-heading">
                                 <h3 class="panel-title">Node ${index}</h3>
                             </div>
                             <div class="panel-body">
                             <form id="set_frequency_${index}" method="POST" action='#'>
                                 <div class="form-group">
-                                    Frequency: <span id='frequency_${index}'>${frequency}</span>
                                     <div class="input-group input-group-sm">
-                                        <input class="form-control" type="text" name="frequency_val_${index}" id="frequency_val_${index}" value='${frequency}'>
+                                        `+get_frequency_select(frequency,index)+`
                                         <span class="input-group-btn">
                                             <input class="btn btn-default" type="submit" value="Set">
                                         </span>
@@ -209,6 +270,8 @@
                 append_to_log('get_settings returned ' + JSON.stringify(msg));
 
                 get_timestamp();
+
+                get_system_info();
             });
 
             socket.on('frequency_set', function(msg) {
@@ -258,7 +321,7 @@
             }
 
             socket.on('pass_record', function(msg) {
-                buzzer.play();
+                if (PLAY_SOUND) buzzer.play();
                 var lap_table = $('#lap_table_' + msg.node);
                 const Lap = (index, rssi, time_lap, time_total) => `
                     <tr>
@@ -284,7 +347,20 @@
     </script>
 </head>
 <body>
-    <div class="container-fluid">
+    <div class="container">
+        <div class="row">
+            <div class="col-xs-12">
+                <div class="page-header">
+                    <div style="float:right;">
+                        <ul class="nav nav-pills">
+                            <li role="presentation"><a href="/">Status</a></li>
+                            <li role="presentation"><a href="/graphs">Graphs</a></li>
+                        </ul>
+                    </div>
+                    <h2>DELTA 5 TIMING SERVER</h2>
+                </div>
+            </div>
+        </div>
         <div class="row">
             <div class="col-xs-6">
                 <div class='panel panel-default'>
@@ -341,17 +417,55 @@
                             </div>
                         </form>
 
-                        <button class="btn" onclick="get_version()">Get Version</button>
-                        <button class="btn" onclick="get_timestamp()">Get Timestamp</button>
-                        <button class="btn" onclick="get_settings()">Get Settings</button>
-                        <button class="btn btn-space btn-danger" onclick="reset()">Reset</button>
+                        <button class="btn btn-sm btn-info" onclick="get_version()">Get Version</button>
+                        <button class="btn btn-sm btn-info" onclick="get_timestamp()">Get Timestamp</button>
+                        <button class="btn btn-sm btn-info" onclick="get_settings()">Get Settings</button>
+                        <button class="btn btn-sm btn-danger" style="margin-left:10px;" onclick="reset()">Reset</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class='col-md-2'></div>
+
+            <div class='col-md-4'>
+                <div class='panel panel-default'>
+                    <div class="panel-heading">
+                        <h3 class="panel-title">System</h3>
+                    </div>
+                    <div class="panel-body">
+                        <ul class="list-group">
+                            <li class="list-group-item">
+                                <span class="badge" id="hostname"></span>
+                                Hostname
+                            </li>
+                            <li class="list-group-item">
+                                <span class="badge"><span id="cpu_temp"></span>&deg;C</span>
+                                CPU temperature
+                            </li>
+                        </ul>
+
+                        <button class="btn btn-sm btn-default" style="float:right;margin-left:10px;" onclick="restart_pi()">Restart</button>
+                        <button class="btn btn-sm btn-default" style="float:right;" onclick="shutdown_pi()">Shutdown</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <div class="row" id="nodes"></div>
+
+        <div class="row">
+            <div class="col-xs-12">
+                <div class='panel panel-default'>
+                    <div class="panel-heading">
+                        <h3 class="panel-title">Receive log</h3>
+                    </div>
+                    <div class="panel-body">
+                        <div id="log"></div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="row" id="nodes"></div>
-        <h3>Receive:</h3>
-    <div id="log"></div>
+
 </div>
 </body>
 </html>
