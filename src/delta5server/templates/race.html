@@ -90,6 +90,16 @@
 			}
 		});
 
+		socket.on('phonetic_data', function (msg) {
+			var $ttstest = msg.pilot + " lap " + msg.lap + " " + msg.phonetic;
+			speak('<div class="speech">' + $ttstest + '</div> div.speech');				
+		})
+
+		socket.on('language_data', function (msg) {
+			var $testlang = msg.language;
+			sellang = $testlang;
+		})
+		
 		socket.on('current_heat', function (msg) {
 			$('.current_heat').html('Heat ' + msg.current_heat);
 			for (i = 0; i < msg.callsign.length; i++) {
@@ -104,7 +114,7 @@
 		});
 
 		socket.on('start_timer_2min', function (msg) {
-			timer.reset(121); // Stop and reset with 121 seconds to catch buzzer
+			timer.reset({{fix_race_time+1}});
 			timer.mode(0); // Count down mode
 			timer.start(); // Start clock
 		});
@@ -138,6 +148,14 @@
 			return false;
 		});
 
+		$('button#simulate_lap').click(function (event) {
+			var data = {
+				node: parseInt($(this).data('node')),
+			};
+			socket.emit('simulate_lap', data);
+			return false;
+		});
+
 		$(document).on("click", ".delete_lap", function (event) { // Needed for buttons added after document load
 			var data = {
 				node: parseInt($(this).data('node')),
@@ -155,6 +173,76 @@
 		});
 	});
 
+	var sellang = {{ lang_id }};
+
+	function speak(obj) {
+		switch (sellang) {
+			case 1:
+				$(obj).articulate('setVoice','name','Microsoft David Desktop - English (United States)').articulate('speak');
+				break;
+			case 2:
+				$(obj).articulate('setVoice','name','Microsoft Zira Desktop - English (United States)').articulate('speak');
+				break;
+			case 3:
+				$(obj).articulate('setVoice','name','Google US English').articulate('speak');
+				break;
+			case 4:
+				$(obj).articulate('setVoice','name','Google UK English Female').articulate('speak');
+				break;
+			case 5:
+				$(obj).articulate('setVoice','name','Google UK English Male').articulate('speak');
+				break;
+			case 6:
+				$(obj).articulate('setVoice','name','Google Deutsch').articulate('speak');
+				break;			
+			case 7:
+				$(obj).articulate('setVoice','name','Google español').articulate('speak');
+				break;
+			case 8:
+				$(obj).articulate('setVoice','name','Google español de Estados Unidos').articulate('speak');
+				break;
+			case 9:
+				$(obj).articulate('setVoice','name','Google français').articulate('speak');
+				break;
+			case 10:
+				$(obj).articulate('setVoice','name','Google हिन्दी').articulate('speak');
+				break;
+			case 11:
+				$(obj).articulate('setVoice','name','Google Bahasa Indonesia').articulate('speak');
+				break;
+			case 12:
+				$(obj).articulate('setVoice','name','Google italiano').articulate('speak');
+				break;
+			case 13:
+				$(obj).articulate('setVoice','name','Google 日本語').articulate('speak');
+				break;
+			case 14:
+				$(obj).articulate('setVoice','name','Google 한국의').articulate('speak');
+				break;
+			case 15:
+				$(obj).articulate('setVoice','name','Google Nederlands').articulate('speak');
+				break;
+			case 16:
+				$(obj).articulate('setVoice','name','Google polski').articulate('speak');
+				break;
+			case 17:
+				$(obj).articulate('setVoice','name','Google português do Brasil').articulate('speak');
+				break;
+			case 18:
+				$(obj).articulate('setVoice','name','Google русский').articulate('speak');
+				break;
+			case 19:
+				$(obj).articulate('setVoice','name','Google 國語（臺灣）').articulate('speak');
+				break;
+		}
+	};
+
+	function ratenormal(obj) {
+		$(obj).articulate('rate', 1.0);
+	};
+	function ratefast(obj) {
+		$(obj).articulate('rate', 3.0);
+	};
 </script>
 {% endblock %} {% block content %}
 
@@ -173,7 +261,7 @@
 			</ul>
 		</div>
 		<button type="button" class="btn btn-default" id="start_race" onclick="this.blur();">Start Race</button>
-		<button type="button" class="btn btn-default" id="start_race_2min" onclick="this.blur();">Start Race 2min</button> {% include
+		<button type="button" class="btn btn-default" id="start_race_2min" onclick="this.blur();">Start Fixed Time Race</button> {% include
 		"build_timer.html" %}
 		<button type="button" class="btn btn-default" id="stop_race" disabled="disabled" onclick="this.blur();">Stop Race</button>
 		<button type="button" class="btn btn-default" id="save_laps" disabled="disabled" onclick="this.blur();">Save Laps</button>
@@ -218,6 +306,15 @@
 					{{ pilots.query.filter_by( pilot_id=heats.query.filter_by(heat_id=current_heat,node_index=node).first().pilot_id ).first().callsign
 					}}
 				</h4>
+			</div>
+			<div class="panel-heading">
+				<p class="panel-title">
+					<small>{{ channels[node] }} {{ frequencies[node] }}</small>
+				</p>
+				<!-- Comment-out <p></p> above and enable 'button' below to get simulate-lap buttons for debug testing -->
+				<!--
+				<button type="button" class="btn btn-default" id="simulate_lap" data-node="{{ node }}" onclick="this.blur();"><small>{{ channels[node] }} {{ frequencies[node] }}</small></button>
+				-->
 			</div>
 			<table class="table" id="current_laps_{{ node }}">
 				<thead>

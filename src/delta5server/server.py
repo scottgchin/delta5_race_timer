@@ -14,7 +14,7 @@ import gevent.monkey
 gevent.monkey.patch_all()
 
 sys.path.append('../delta5interface')
-sys.path.append('/home/pi/delta5_race_timer/src/delta5interface') # Needed to run on startup
+sys.path.append('/home/pi/delta5_race_timer/src/delta5interface')  # Needed to run on startup
 from Delta5Interface import get_hardware_interface
 
 from Delta5Race import get_race_state
@@ -44,8 +44,9 @@ class Pilot(DB.Model):
     id = DB.Column(DB.Integer, primary_key=True)
     pilot_id = DB.Column(DB.Integer, unique=True, nullable=False)
     callsign = DB.Column(DB.String(80), unique=True, nullable=False)
+    phonetic = DB.Column(DB.String(80), unique=True, nullable=False)
     name = DB.Column(DB.String(120), nullable=False)
-
+	
     def __repr__(self):
         return '<Pilot %r>' % self.pilot_id
 
@@ -92,6 +93,24 @@ class Frequency(DB.Model):
 
     def __repr__(self):
         return '<Frequency %r>' % self.frequency
+
+
+class Profiles(DB.Model):
+    id = DB.Column(DB.Integer, primary_key=True)
+    name = DB.Column(DB.String(80), unique=True, nullable=False)
+    description = DB.Column(DB.String(256), nullable=True)
+    c_offset = DB.Column(DB.Integer, nullable=True)
+    c_threshold = DB.Column(DB.Integer, nullable=True)
+    t_threshold = DB.Column(DB.Integer, nullable=True)
+
+class LastProfile(DB.Model):
+    id = DB.Column(DB.Integer, primary_key=True)
+    profile_id = DB.Column(DB.Integer, nullable=False)
+
+
+class FixTimeRace(DB.Model):
+    id = DB.Column(DB.Integer, primary_key=True)
+    race_time_sec = DB.Column(DB.Integer, nullable=False)
 
 #
 # Authentication
@@ -181,15 +200,28 @@ def heats():
 @requires_auth
 def race():
     '''Route to race management page.'''
-    return render_template('race.html', num_nodes=RACE.num_nodes, current_heat=RACE.current_heat, \
-        heats=Heat, pilots=Pilot)
+    return render_template('race.html', num_nodes=RACE.num_nodes,
+                           current_heat=RACE.current_heat,
+                           heats=Heat, pilots=Pilot,
+                           fix_race_time=FixTimeRace.query.get(1).race_time_sec,
+						   lang_id=RACE.lang_id,
+        frequencies=[node.frequency for node in INTERFACE.nodes],
+        channels=[Frequency.query.filter_by(frequency=node.frequency).first().channel
+            for node in INTERFACE.nodes])
 
 @APP.route('/settings')
 @requires_auth
 def settings():
     '''Route to settings page.'''
-    return render_template('settings.html', num_nodes=RACE.num_nodes, pilots=Pilot, \
-        frequencies=Frequency, heats=Heat)
+
+    return render_template('settings.html', num_nodes=RACE.num_nodes,
+                           pilots=Pilot,
+                           frequencies=Frequency,
+                           heats=Heat,
+                           last_profile =  LastProfile,
+                           profiles = Profiles,
+                           current_fix_race_time=FixTimeRace.query.get(1).race_time_sec,
+						   lang_id=RACE.lang_id)
 
 # Debug Routes
 
@@ -241,6 +273,13 @@ def on_set_frequency(data):
     server_log('Frequency set: Node {0} Frequency {1}'.format(node_index+1, frequency))
     emit_node_data() # Settings page, new node channel
 
+@SOCKET_IO.on('set_language')
+def on_set_language(data):
+    '''Set language.'''
+    RACE.lang_id = data['language']
+    emit_language_data()
+
+
 @SOCKET_IO.on('add_heat')
 def on_add_heat():
     '''Adds the next available heat number to the database.'''
@@ -267,7 +306,7 @@ def on_add_pilot():
     '''Adds the next available pilot id number in the database.'''
     max_pilot_id = DB.session.query(DB.func.max(Pilot.pilot_id)).scalar()
     DB.session.add(Pilot(pilot_id=max_pilot_id+1, callsign='callsign{0}'.format(max_pilot_id+1), \
-        name='Pilot Name'))
+        phonetic='callsign{0}'.format(max_pilot_id+1), name='Pilot Name'))
     DB.session.commit()
     server_log('Pilot added: Pilot {0}'.format(max_pilot_id+1))
 
@@ -283,6 +322,18 @@ def on_set_pilot_callsign(data):
     emit_pilot_data() # Settings page, new pilot callsign
     emit_heat_data() # Settings page, new pilot callsign in heats
 
+@SOCKET_IO.on('set_pilot_phonetic')
+def on_set_pilot_phonetic(data):
+    '''Gets pilot phonetic to update database.'''
+    pilot_id = data['pilot_id']
+    phonetic = data['phonetic']
+    db_update = Pilot.query.filter_by(pilot_id=pilot_id).first()
+    db_update.phonetic = phonetic
+    DB.session.commit()
+    server_log('Pilot phonetic set: Pilot {0} Phonetic {1}'.format(pilot_id, phonetic))
+    emit_pilot_data() # Settings page, new pilot phonetic
+    emit_heat_data() # Settings page, new pilot phonetic in heats. Needed?
+
 @SOCKET_IO.on('set_pilot_name')
 def on_set_pilot_name(data):
     '''Gets pilot name to update database.'''
@@ -294,27 +345,102 @@ def on_set_pilot_name(data):
     server_log('Pilot name set: Pilot {0} Name {1}'.format(pilot_id, name))
     emit_pilot_data() # Settings page, new pilot name
 
+@SOCKET_IO.on('speak_pilot')
+def on_speak_pilot(data):
+    '''Speaks the phonetic name of the pilot.'''
+    pilot_id = data['pilot_id']
+    phtext = Pilot.query.filter_by(pilot_id=pilot_id).first().phonetic
+    emit_phonetic_text(phtext)
+    server_log('Speak pilot: {0}'.format(phtext))
+
+@SOCKET_IO.on('add_profile')
+def on_add_profile():
+    '''Adds new profile in the database.'''
+    max_profile_id = DB.session.query(Profiles).count()+1
+    DB.session.add(Profiles(name='New Profile %s' % max_profile_id,
+                           description = 'New Profile %s' % max_profile_id,
+                           c_offset=8,
+                           c_threshold=90,
+                           t_threshold=40))
+    DB.session.commit()
+    on_set_profile(data={ 'profile': 'New Profile %s' % max_profile_id})
+
+@SOCKET_IO.on('delete_profile')
+def on_delete_profile():
+    '''Delete profile'''
+    if (DB.session.query(Profiles).count() > 1): # keep one profile
+     last_profile = LastProfile.query.get(1).profile_id
+     profile = Profiles.query.get(last_profile)
+     DB.session.delete(profile)
+     DB.session.commit()
+     last_profile =  LastProfile.query.get(1)
+     first_profile_id = Profiles.query.first().id
+     last_profile.profile_id = first_profile_id
+     DB.session.commit()
+     profile =Profiles.query.get(first_profile_id)
+     INTERFACE.set_calibration_threshold_global(profile.c_threshold)
+     INTERFACE.set_calibration_offset_global(profile.c_offset)
+     INTERFACE.set_trigger_threshold_global(profile.t_threshold)
+     emit_node_tuning()
+
+@SOCKET_IO.on('set_profile_name')
+def on_set_profile_name(data):
+    ''' update profile name '''
+    profile_name = data['profile_name']
+    last_profile = LastProfile.query.get(1)
+    profile = Profiles.query.filter_by(id=last_profile.profile_id).first()
+    profile.name = profile_name
+    DB.session.commit()
+    server_log('set profile name %s' % (profile_name))
+    emit_node_tuning()
+
+@SOCKET_IO.on('set_profile_description')
+def on_set_profile_description(data):
+    ''' update profile description '''
+    profile_description = data['profile_description']
+    last_profile = LastProfile.query.get(1)
+    profile = Profiles.query.filter_by(id=last_profile.profile_id).first()
+    profile.description = profile_description
+    DB.session.commit()
+    server_log('set profile description %s for profile %s' %
+               (profile_name, profile.name))
+    emit_node_tuning()
+
 @SOCKET_IO.on('set_calibration_threshold')
 def on_set_calibration_threshold(data):
     '''Set Calibration Threshold.'''
     calibration_threshold = data['calibration_threshold']
     INTERFACE.set_calibration_threshold_global(calibration_threshold)
+    last_profile = LastProfile.query.get(1)
+    profile = Profiles.query.filter_by(id=last_profile.profile_id).first()
+    profile.c_threshold = calibration_threshold
+    DB.session.commit()
     server_log('Calibration threshold set: {0}'.format(calibration_threshold))
     emit_node_tuning()
+
 
 @SOCKET_IO.on('set_calibration_offset')
 def on_set_calibration_offset(data):
     '''Set Calibration Offset.'''
     calibration_offset = data['calibration_offset']
     INTERFACE.set_calibration_offset_global(calibration_offset)
+    last_profile = LastProfile.query.get(1)
+    profile = Profiles.query.filter_by(id=last_profile.profile_id).first()
+    profile.c_offset = calibration_offset
+    DB.session.commit()
     server_log('Calibration offset set: {0}'.format(calibration_offset))
     emit_node_tuning()
+
 
 @SOCKET_IO.on('set_trigger_threshold')
 def on_set_trigger_threshold(data):
     '''Set Trigger Threshold.'''
     trigger_threshold = data['trigger_threshold']
     INTERFACE.set_trigger_threshold_global(trigger_threshold)
+    last_profile = LastProfile.query.get(1)
+    profile = Profiles.query.filter_by(id=last_profile.profile_id).first()
+    profile.t_threshold = trigger_threshold
+    DB.session.commit()
     server_log('Trigger threshold set: {0}'.format(trigger_threshold))
     emit_node_tuning()
 
@@ -334,7 +460,31 @@ def on_shutdown_pi():
     server_log('Shutdown pi')
     os.system("sudo shutdown now")
 
-# @SOCKET_IO.on('clear_rounds')
+
+@SOCKET_IO.on("set_profile")
+def on_set_profile(data):
+    ''' set current profile '''
+    profile_val = data['profile']
+    profile =Profiles.query.filter_by(name=profile_val).first()
+    DB.session.flush()
+    last_profile = LastProfile.query.get(1)
+    last_profile.profile_id = profile.id
+    DB.session.commit()
+    INTERFACE.set_calibration_threshold_global(profile.c_threshold)
+    INTERFACE.set_calibration_offset_global(profile.c_offset)
+    INTERFACE.set_trigger_threshold_global(profile.t_threshold)
+    emit_node_tuning()
+    server_log("set tune paramas for profile '%s'" % profile_val)
+
+@SOCKET_IO.on("set_fix_race_time")
+def on_set_fix_race_time(data):
+    race_time = data['race_time']
+    fix_race_time = FixTimeRace.query.get(1)
+    fix_race_time.race_time_sec = race_time
+    DB.session.commit()
+    server_log("set fixed time race to %s seconds" % race_time)
+
+    # @SOCKET_IO.on('clear_rounds')
 # def on_reset_heats():
 #     '''Clear all saved races.'''
 #     DB.session.query(SavedRace).delete() # Remove all races
@@ -354,7 +504,7 @@ def on_shutdown_pi():
 # @SOCKET_IO.on('reset_pilots')
 # def on_reset_heats():
 #     '''Resets default pilots for nodes detected.'''
-    
+
 #     DB.session.query(Pilot).delete() # Remove all pilots
 #     DB.session.commit()
 #     DB.session.add(Pilot(pilot_id='0', callsign='-', name='-'))
@@ -466,6 +616,13 @@ def on_delete_lap(data):
     emit_current_laps() # Race page, update web client
     emit_leaderboard() # Race page, update web client
 
+@SOCKET_IO.on('simulate_lap')
+def on_simulate_lap(data):
+    '''Simulates a lap (for debug testing).'''
+    node_index = data['node']
+    server_log('Simulated lap: Node {0}'.format(node_index))
+    INTERFACE.intf_simulate_lap(node_index)
+
 # Socket io emit functions
 
 def emit_race_status():
@@ -481,17 +638,23 @@ def emit_node_data():
         'trigger_rssi': [node.trigger_rssi for node in INTERFACE.nodes],
         'peak_rssi': [node.peak_rssi for node in INTERFACE.nodes]
     })
-
 def emit_node_tuning():
     '''Emits node tuning values.'''
+    last_profile = LastProfile.query.get(1)
+    tune_val = Profiles.query.get(last_profile.profile_id)
     SOCKET_IO.emit('node_tuning', {
         'calibration_threshold': \
-            INTERFACE.get_calibration_threshold_json()['calibration_threshold'],
+            tune_val.c_threshold,
         'calibration_offset': \
-            INTERFACE.get_calibration_offset_json()['calibration_offset'],
+            tune_val.c_offset,
         'trigger_threshold': \
-            INTERFACE.get_trigger_threshold_json()['trigger_threshold']
+            tune_val.t_threshold,
+        'profile_name':
+            tune_val.name,
+        'profile_description':
+            tune_val.description
     })
+
 
 def emit_current_laps():
     '''Emits current laps.'''
@@ -573,7 +736,7 @@ def emit_leaderboard():
         'average_lap': [time_format(leaderboard_sorted[i][4]) for i in range(RACE.num_nodes)],
         'fastest_lap': [time_format(leaderboard_sorted[i][5]) for i in range(RACE.num_nodes)]
     })
-
+	
 def emit_heat_data():
     '''Emits heat data.'''
     current_heats = []
@@ -605,6 +768,25 @@ def emit_current_heat():
         'current_heat': RACE.current_heat,
         'callsign': callsigns
     })
+
+def emit_phonetic_data(pilot_id, lap_id, lap_time):
+    '''Emits phonetic data.'''
+    phonetic_time = phonetictime_format(lap_time)
+    phonetic_name = Pilot.query.filter_by(pilot_id=pilot_id).first().phonetic
+    SOCKET_IO.emit('phonetic_data', {'pilot': phonetic_name, 'lap': lap_id, 'phonetic': phonetic_time})
+
+def emit_language_data():
+    '''Emits language.'''
+    SOCKET_IO.emit('language_data', {'language': RACE.lang_id})
+
+def emit_current_fix_race_time():
+    ''' Emit current fixed time race time '''
+    race_time_sec = FixTimeRace.query.get(1).race_time_sec
+    SOCKET_IO.emit('set_fix_race_time',{ fix_race_time: race_time_sec})
+
+def emit_phonetic_text(phtext):
+    '''Emits given phonetic text.'''
+    SOCKET_IO.emit('speak_phonetic_text', {'text': phtext})
 
 #
 # Program Functions
@@ -640,6 +822,14 @@ def time_format(millis):
     milliseconds = over
     return '{0:02d}:{1:02d}.{2:03d}'.format(minutes, seconds, milliseconds)
 
+def phonetictime_format(millis):
+    '''Convert milliseconds to phonetic'''
+    millis = int(millis + 50)  # round to nearest tenth of a second
+    seconds = millis / 1000
+    over = (millis % 60000) % 1000
+    tenths = over / 100
+    return '{0:01d}.{1:01d}'.format(seconds, tenths)
+	
 def pass_record_callback(node, ms_since_lap):
     '''Handles pass records from the nodes.'''
     server_log('Raw pass record: Node: {0}, MS Since Lap: {1}'.format(node.index, ms_since_lap))
@@ -679,6 +869,8 @@ def pass_record_callback(node, ms_since_lap):
             .format(node.index, lap_id, time_format(lap_time)))
         emit_current_laps() # Updates all laps on the race page
         emit_leaderboard() # Updates leaderboard
+        if lap_id > 0: 
+            emit_phonetic_data(pilot_id, lap_id, lap_time) # Sends phonetic data to be spoken
 
 INTERFACE.pass_record_callback = pass_record_callback
 
@@ -715,6 +907,9 @@ def db_init():
     db_reset_frequencies()
     db_reset_current_laps()
     db_reset_saved_races()
+    db_reset_profile()
+    db_reset_default_profile()
+    db_reset_fix_race_time()
     server_log('Database initialized')
 
 def db_reset():
@@ -724,6 +919,9 @@ def db_reset():
     db_reset_frequencies()
     db_reset_current_laps()
     db_reset_saved_races()
+    db_reset_profile()
+    db_reset_default_profile()
+    db_reset_fix_race_time()
     server_log('Database reset')
 
 def db_reset_keep_pilots():
@@ -732,18 +930,18 @@ def db_reset_keep_pilots():
     db_reset_frequencies()
     db_reset_current_laps()
     db_reset_saved_races()
+    db_reset_fix_race_time()
     server_log('Database reset, pilots kept')
 
 def db_reset_pilots():
     '''Resets database pilots to default.'''
     DB.session.query(Pilot).delete()
-    DB.session.add(Pilot(pilot_id='0', callsign='-', name='-'))
+    DB.session.add(Pilot(pilot_id='0', callsign='-', name='-', phonetic="-"))
     for node in range(RACE.num_nodes):
         DB.session.add(Pilot(pilot_id=node+1, callsign='callsign{0}'.format(node+1), \
-            name='Pilot Name'))
+            name='Pilot Name', phonetic='callsign{0}'.format(node+1)))
     DB.session.commit()
     server_log('Database pilots reset')
-
 def db_reset_heats():
     '''Resets database heats to default.'''
     DB.session.query(Heat).delete()
@@ -751,7 +949,6 @@ def db_reset_heats():
         DB.session.add(Heat(heat_id=1, node_index=node, pilot_id=node+1))
     DB.session.commit()
     server_log('Database heats reset')
-
 def db_reset_frequencies():
     '''Resets database frequencies to default.'''
     DB.session.query(Frequency).delete()
@@ -762,15 +959,15 @@ def db_reset_frequencies():
     DB.session.add(Frequency(band='IMD', channel='F7', frequency='5860'))
     DB.session.add(Frequency(band='IMD', channel='E6', frequency='5905'))
     DB.session.add(Frequency(band='IMD', channel='E4', frequency='5645'))
-    # Band C - Raceband
-    DB.session.add(Frequency(band='C', channel='C1', frequency='5658'))
-    DB.session.add(Frequency(band='C', channel='C2', frequency='5695'))
-    DB.session.add(Frequency(band='C', channel='C3', frequency='5732'))
-    DB.session.add(Frequency(band='C', channel='C4', frequency='5769'))
-    DB.session.add(Frequency(band='C', channel='C5', frequency='5806'))
-    DB.session.add(Frequency(band='C', channel='C6', frequency='5843'))
-    DB.session.add(Frequency(band='C', channel='C7', frequency='5880'))
-    DB.session.add(Frequency(band='C', channel='C8', frequency='5917'))
+    # Band R - Raceband
+    DB.session.add(Frequency(band='R', channel='R1', frequency='5658'))
+    DB.session.add(Frequency(band='R', channel='R2', frequency='5695'))
+    DB.session.add(Frequency(band='R', channel='R3', frequency='5732'))
+    DB.session.add(Frequency(band='R', channel='R4', frequency='5769'))
+    DB.session.add(Frequency(band='R', channel='R5', frequency='5806'))
+    DB.session.add(Frequency(band='R', channel='R6', frequency='5843'))
+    DB.session.add(Frequency(band='R', channel='R7', frequency='5880'))
+    DB.session.add(Frequency(band='R', channel='R8', frequency='5917'))
     # Band F - ImmersionRC, Iftron
     DB.session.add(Frequency(band='F', channel='F1', frequency='5740'))
     DB.session.add(Frequency(band='F', channel='F2', frequency='5760'))
@@ -807,6 +1004,15 @@ def db_reset_frequencies():
     DB.session.add(Frequency(band='A', channel='A6', frequency='5765'))
     DB.session.add(Frequency(band='A', channel='A7', frequency='5745'))
     DB.session.add(Frequency(band='A', channel='A8', frequency='5725'))
+    # Band L - Lowband
+    DB.session.add(Frequency(band='L', channel='L1', frequency='5362'))
+    DB.session.add(Frequency(band='L', channel='L2', frequency='5399'))
+    DB.session.add(Frequency(band='L', channel='L3', frequency='5436'))
+    DB.session.add(Frequency(band='L', channel='L4', frequency='5473'))
+    DB.session.add(Frequency(band='L', channel='L5', frequency='5510'))
+    DB.session.add(Frequency(band='L', channel='L6', frequency='5547'))
+    DB.session.add(Frequency(band='L', channel='L7', frequency='5584'))
+    DB.session.add(Frequency(band='L', channel='L8', frequency='5621'))
     DB.session.commit()
     server_log('Database frequencies reset')
 
@@ -815,13 +1021,46 @@ def db_reset_current_laps():
     DB.session.query(CurrentLap).delete()
     DB.session.commit()
     server_log('Database current laps reset')
-    
+
 def db_reset_saved_races():
     '''Resets database saved races to default.'''
     DB.session.query(SavedRace).delete()
     DB.session.commit()
     server_log('Database saved races reset')
 
+def db_reset_profile():
+    '''Set default profile'''
+    DB.session.query(Profiles).delete()
+    DB.session.add(Profiles(name="default 25mW",
+                             description ="default tune params for 25mW race",
+                             c_offset=8,
+                             c_threshold=65,
+                             t_threshold=40))
+    DB.session.add(Profiles(name="default 200mW",
+                             description ="default tune params for 200mW race",
+                             c_offset=8,
+                             c_threshold=90,
+                             t_threshold=40))
+    DB.session.add(Profiles(name="default 600mW",
+                             description ="default tune params for 600mW race",
+                             c_offset=8,
+                             c_threshold=100,
+                             t_threshold=40))
+    DB.session.commit()
+    server_log("Database set default profiles for 25,200,600 mW races")
+
+def db_reset_default_profile():
+    DB.session.query(LastProfile).delete()
+    DB.session.add(LastProfile(profile_id=1))
+    DB.session.commit()
+    server_log("Database set default profile on default 25mW race")
+
+
+def db_reset_fix_race_time():
+    DB.session.query(FixTimeRace).delete()
+    DB.session.add(FixTimeRace(race_time_sec=120))
+    DB.session.commit()
+    server_log("Database set fixed time race to 120 sec (2 minutes)")
 #
 # Program Initialize
 #
@@ -842,6 +1081,13 @@ if not os.path.exists('database.db'):
 # Clear any current laps from the database on each program start
 # DB session commit needed to prevent 'application context' errors
 db_reset_current_laps()
+
+# Send initial profile values to nodes
+last_profile = LastProfile.query.get(1)
+tune_val = Profiles.query.get(last_profile.profile_id)
+INTERFACE.set_calibration_threshold_global(tune_val.c_threshold)
+INTERFACE.set_calibration_offset_global(tune_val.c_offset)
+INTERFACE.set_trigger_threshold_global(tune_val.t_threshold)
 
 
 # Test data - Current laps
