@@ -64,46 +64,46 @@ const int rssiPin = 0;
 #define WRITE_FILTER_RATIO 0x69
 
 struct {
-    uint16_t volatile vtxFreq = 5800;
-    // Subtracted from the peak rssi during a calibration pass to determine the trigger value
-    uint16_t volatile calibrationOffset = 8;
-    // Rssi must fall below trigger - settings.calibrationThreshold to end a calibration pass
-    uint16_t volatile calibrationThreshold = 95;
-    // Rssi must fall below trigger - settings.triggerThreshold to end a normal pass
-    uint16_t volatile triggerThreshold = 40;
-    uint8_t volatile filterRatio = 10;
-    float volatile filterRatioFloat = 0.0f;
+      uint16_t volatile vtxFreq = 5800;
+      // Subtracted from the peak rssi during a calibration pass to determine the trigger value
+      uint16_t volatile calibrationOffset = 8;
+      // Rssi must fall below trigger - settings.calibrationThreshold to end a calibration pass
+      uint16_t volatile calibrationThreshold = 95;
+      // Rssi must fall below trigger - settings.triggerThreshold to end a normal pass
+      uint16_t volatile triggerThreshold = 40;
+      uint8_t volatile filterRatio = 10;
+      float volatile filterRatioFloat = 0.0f;
 } settings;
 
 struct {
-    bool volatile calibrationMode = false;
-    // True when the quad is going through the gate
-    bool volatile crossing = false;
-    // Current unsmoothed rssi
-    uint16_t volatile rssiRaw = 0;
-    // Smoothed rssi value, needs to be a float for smoothing to work
-    float volatile rssiSmoothed = 0;
-    // int representation of the smoothed rssi value
-    uint16_t volatile rssi = 0;
-    // rssi value that will trigger a new pass
-    uint16_t volatile rssiTrigger;
-    // The peak raw rssi seen the current pass
-    uint16_t volatile rssiPeakRaw = 0;
-    // The peak smoothed rssi seen the current pass
-    uint16_t volatile rssiPeak = 0;
-    // The time of the peak raw rssi for the current pass
-    uint32_t volatile rssiPeakRawTimeStamp = 0;
+      bool volatile calibrationMode = false;
+      // True when the quad is going through the gate
+      bool volatile crossing = false;
+      // Current unsmoothed rssi
+      uint16_t volatile rssiRaw = 0;
+      // Smoothed rssi value, needs to be a float for smoothing to work
+      float volatile rssiSmoothed = 0;
+      // int representation of the smoothed rssi value
+      uint16_t volatile rssi = 0;
+      // rssi value that will trigger a new pass
+      uint16_t volatile rssiTrigger;
+      // The peak raw rssi seen the current pass
+      uint16_t volatile rssiPeakRaw = 0;
+      // The peak smoothed rssi seen the current pass
+      uint16_t volatile rssiPeak = 0;
+      // The time of the peak raw rssi for the current pass
+      uint32_t volatile rssiPeakRawTimeStamp = 0;
 
-    // variables to track the loop time
-    uint32_t volatile loopTime = 0;
-    uint32_t volatile lastLoopTimeStamp = 0;
+      // variables to track the loop time
+      uint32_t volatile loopTime = 0;
+      uint32_t volatile lastLoopTimeStamp = 0;
 } state;
 
 struct {
-    uint16_t volatile rssiPeakRaw;
-    uint16_t volatile rssiPeak;
-    uint32_t volatile timeStamp;
-    uint8_t volatile lap;
+      uint16_t volatile rssiPeakRaw;
+      uint16_t volatile rssiPeak;
+      uint32_t volatile timeStamp;
+      uint8_t volatile lap;
 } lastPass;
 
 uint8_t volatile ioCommand; // I2C code to identify messages
