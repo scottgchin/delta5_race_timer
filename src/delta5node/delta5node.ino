@@ -29,7 +29,7 @@
 // Node Setup -- Set the i2c address here
 // Node 1 = 8, Node 2 = 10, Node 3 = 12, Node 4 = 14
 // Node 5 = 16, Node 6 = 18, Node 7 = 20, Node 8 = 22
-#define i2cSlaveAddress 8
+//#define i2cSlaveAddress 8
 
 const int slaveSelectPin = 10; // Setup data pins for rx5808 comms
 const int spiDataPin = 11;
@@ -107,6 +107,25 @@ int ioBufferIndex = 0;
 void setup() {
 	Serial.begin(115200); // Start serial for output/debugging
 
+	digitalWrite(4, HIGH);
+	digitalWrite(5, HIGH);
+	digitalWrite(6, HIGH);
+	digitalWrite(7, HIGH);
+	digitalWrite(8, HIGH);
+
+if (digitalRead(4) == LOW) {
+	if (digitalRead(5) == LOW){i2cSlaveAddress = 8; }
+	else if (digitalRead(6) == LOW){i2cSlaveAddress = 10;}
+	else if (digitalRead(7) == LOW){i2cSlaveAddress = 12;}
+	else if (digitalRead(8) == LOW){i2cSlaveAddress = 14;}
+		} else {
+	if (digitalRead(5) == LOW){i2cSlaveAddress = 16; }
+	else if (digitalRead(6) == LOW){i2cSlaveAddress = 18;}
+	else if (digitalRead(7) == LOW){i2cSlaveAddress = 20;}
+	else if (digitalRead(8) == LOW){i2cSlaveAddress = 22;}
+}
+
+	
 	pinMode (slaveSelectPin, OUTPUT); // RX5808 comms
 	pinMode (spiDataPin, OUTPUT);
 	pinMode (spiClockPin, OUTPUT);
