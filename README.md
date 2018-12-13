@@ -5,7 +5,7 @@ Changing the way to select the node i2c address using a pin in the nano
 
 by pulling one of the pins(5-8) low i2cSlaveAddress will be assigned 8,10,12 or 14
 
-by pulling pin 4 low you tell the nodes they are board 2 so i2cSlaveAddress will be assigned 16,18,20 or 22
+by pulling pin 4 low you tell the nodes they are on board 2 so i2cSlaveAddress will be assigned 16,18,20 or 22
 
 the rest of the code is as pulled from the orginal source 
 
