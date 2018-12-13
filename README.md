@@ -1,5 +1,13 @@
 # Delta 5 Race Timer
-
+-------------------------------------------------------------------------------------------------------------
+Changing the way to select the node i2c address using a pin in the nano
+by pulling one of the pins(5-8) low i2cSlaveAddress will be assigned 8,10,12 or 14
+by pulling pin 4 low you tell the nodes they are board 2 so i2cSlaveAddress will be assigned 16,18,20 or 22
+ 
+ the rest of the code is as pulled from the orginal source 
+ -------------------------------------------------------------------------------------------------------------
+ 
+ 
 <img src="doc/img/delta5racetimer.jpg" align="right" alt="Delta5 Race Timer"/>
 
 Multi-node radio frequency race timing system for FPV drone racing. Uses the 5.8Ghz video signals already being broadcast by each drones to trigger a lap timer; no additional equipment is required on the drone.
