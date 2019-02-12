@@ -213,17 +213,17 @@ def on_set_filter_ratio(data):
 
 @socketio.on('reset_auto_calibration')
 def on_reset_auto_calibration(data):
-    onoff(strip, Color(255,0,0)) #RED ON
-    time.sleep(0.5)
-    onoff(strip, Color(0,0,0)) #OFF
-    time.sleep(0.5)
-    onoff(strip, Color(255,0,0)) #RED ON
-    time.sleep(0.5)
-    onoff(strip, Color(0,0,0)) #OFF
-    time.sleep(0.5)
-    onoff(strip, Color(255,0,0)) #RED ON
-    time.sleep(0.5)
-    onoff(strip, Color(0,0,0)) #OFF
+#    onoff(strip, Color(255,0,0)) #RED ON
+#    time.sleep(0.5)
+#    onoff(strip, Color(0,0,0)) #OFF
+#    time.sleep(0.5)
+#    onoff(strip, Color(255,0,0)) #RED ON
+#    time.sleep(0.5)
+#    onoff(strip, Color(0,0,0)) #OFF
+#    time.sleep(0.5)
+#    onoff(strip, Color(255,0,0)) #RED ON
+#    time.sleep(0.5)
+#    onoff(strip, Color(0,0,0)) #OFF
     data = parse_json(data)
     print(data)
     index = data['node']
