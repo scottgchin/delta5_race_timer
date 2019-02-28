@@ -157,6 +157,7 @@ python server.py
 #### Start on Boot
 Create a service
 ```
+cd ~
 sudo nano /lib/systemd/system/delta5.service
 ```
 with the following contents
