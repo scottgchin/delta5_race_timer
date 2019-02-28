@@ -16,7 +16,7 @@ $ sudo apt-get install samba samba-common-bin
 ```
 Open the config
 ```
-$ sudo leafpad /etc/samba/smb.conf
+$ sudo nano /etc/samba/smb.conf
 ```
 Set the following, uncomment if needed
 ```
