@@ -25,6 +25,11 @@
 
 ## Hardware Setup
 
+### Tweet FPV Video Tutorial Series
+https://youtu.be/IrgsDVdCCPk
+https://youtu.be/5K_Z2D6hnRM
+https://youtu.be/uFauJkVd7HA
+
 ### RX5808 Video Receivers
 Modify the rx5808 receivers to use SPI.
 
