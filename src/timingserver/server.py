@@ -32,7 +32,7 @@ async_mode = "gevent"
 
 app = Flask(__name__, static_url_path='/static')
 app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app, async_mode=async_mode)
+socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins='*')
 heartbeat_thread = None
 
 firmware_version = {'major': 0, 'minor': 1}
