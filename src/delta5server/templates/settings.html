@@ -88,6 +88,7 @@
 			$('.set_calibration_threshold').val( msg.calibration_threshold);
 			$('.set_calibration_offset').val( msg.calibration_offset);
 			$('.set_trigger_threshold').val( msg.trigger_threshold);
+			$('.set_filter_ratio').val( msg.filter_ratio);
 			$('.set_profile_name').val( msg.profile_name);
 			$('.set_profile_description').val( msg.profile_description);
 
@@ -191,6 +192,14 @@
 			};
 			socket.emit('set_trigger_threshold', data);
 		})
+
+		$('.set_filter_ratio').change(function (event) {
+			var data = {
+				filter_ratio: parseInt($(this).val())
+			};
+			socket.emit('set_filter_ratio', data);
+		})
+
 		$('.set_profile_name').change(function (event) {
 			var data = {
 				profile_name: $(this).val()
@@ -563,6 +572,12 @@
 					<td><b>Trigger Threshold (Default 40)</b><br>Trigger minus Trigger Threshold ends normal pass</td>
 					<td>
 						<input type="text" class="form-control set_trigger_threshold">
+					</td>
+				</tr>
+				<tr>
+					<td><b>Filter Ratio (Default 10)</b><br>RSSI Filtering (lower for smoother readings)</td>
+					<td>
+						<input type="text" class="form-control set_filter_ratio">
 					</td>
 				</tr>
 			</table>
