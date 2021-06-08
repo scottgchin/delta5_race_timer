@@ -12,6 +12,9 @@ Each receiver node is tuned to the video frequency that a drone is broadcasting 
 * Manage pilot names, assign them to heats, and after each race save the results to a local database
 * Supports the standard 40 FPV video channels
 
+### SD Card Image
+https://mega.nz/file/MWYFGbqL#_jcxAsHCXrii9s-_gHCkn_nVdplysXhxj_iw_wjlrok
+
 ### Hardware and Software Setup
 To build the system, follow the instructions here: [/doc/Hardware and Software Setup Instructions.md](/doc/Hardware%20and%20Software%20Setup%20Instructions.md)
 
