@@ -910,7 +910,7 @@ def heartbeat_thread_function():
     '''Emits current rssi data.'''
     while True:
         SOCKET_IO.emit('heartbeat', INTERFACE.get_heartbeat_json())
-        gevent.sleep(0.500)
+        gevent.sleep(0.100)
 
 def ms_from_race_start():
     '''Return milliseconds since race start.'''
